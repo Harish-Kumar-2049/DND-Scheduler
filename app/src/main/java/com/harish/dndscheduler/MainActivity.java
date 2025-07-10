@@ -1,47 +1,80 @@
 package com.harish.dndscheduler;
 
+import android.app.NotificationManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.Toast;
-import androidx.activity.EdgeToEdge;
+import android.provider.Settings;
+import android.view.View;
+import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 public class MainActivity extends AppCompatActivity {
+
+    private TextView tvDndStatus;
+    private Button btnToggleDnd;
+    private boolean isDndOn = false;
+
+    private SharedPreferences prefs;
+    private DNDManager dndManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        // Edge-to-edge handling
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
+        tvDndStatus = findViewById(R.id.tv_dnd_status);
+        btnToggleDnd = findViewById(R.id.btn_toggle_dnd);
 
-        // DND Manager setup
-        DNDManager dndManager = new DNDManager(this);
-        Button btnEnableDND = findViewById(R.id.btn_enable);
-        Button btnDisableDND = findViewById(R.id.btn_disable);
+        prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
+        isDndOn = prefs.getBoolean("is_dnd_on", false);
 
-        // Null check for buttons (safety measure)
-        if (btnEnableDND != null && btnDisableDND != null) {
-            btnEnableDND.setOnClickListener(v -> {
-                dndManager.enableDND();
-                Toast.makeText(this, "DND Enabled", Toast.LENGTH_SHORT).show();
-            });
+        dndManager = new DNDManager(this);
 
-            btnDisableDND.setOnClickListener(v -> {
-                dndManager.disableDND();
-                Toast.makeText(this, "DND Disabled", Toast.LENGTH_SHORT).show();
-            });
-        } else {
-            Toast.makeText(this, "Error: Buttons not found", Toast.LENGTH_LONG).show();
+        // Update UI based on current state
+        updateUI();
+
+        btnToggleDnd.setOnClickListener(v -> toggleDnd());
+    }
+
+    private void toggleDnd() {
+        if (!hasDndAccess()) {
+            Toast.makeText(this, "Grant Do Not Disturb access in settings.", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+            return;
         }
+
+        isDndOn = !isDndOn;
+
+        if (isDndOn) {
+            // Schedule DND ON/OFF based on timetable
+            dndManager.scheduleDndForClasses();
+            Toast.makeText(this, "DND auto scheduling enabled.", Toast.LENGTH_SHORT).show();
+        } else {
+            // Cancel scheduled DND and turn off if currently on
+            dndManager.cancelDndSchedules();
+            dndManager.setDndOff();
+            Toast.makeText(this, "DND auto scheduling disabled.", Toast.LENGTH_SHORT).show();
+        }
+
+        // Save state
+        prefs.edit().putBoolean("is_dnd_on", isDndOn).apply();
+        updateUI();
+    }
+
+    private void updateUI() {
+        if (isDndOn) {
+            tvDndStatus.setText("DND is ON");
+            btnToggleDnd.setText("Turn OFF DND");
+        } else {
+            tvDndStatus.setText("DND is OFF");
+            btnToggleDnd.setText("Turn ON DND");
+        }
+    }
+
+    private boolean hasDndAccess() {
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        return nm.isNotificationPolicyAccessGranted();
     }
 }

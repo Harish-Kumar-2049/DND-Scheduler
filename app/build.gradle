@@ -37,9 +37,12 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
-    // Web scraping
-    implementation 'org.jsoup:jsoup:1.17.2'
+    implementation 'com.google.android.material:material:1.9.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:okhttp-urlconnection:4.12.0'
 
+    // Jsoup for HTML parsing
+    implementation 'org.jsoup:jsoup:1.17.2'
     // Database (Room)
     implementation 'androidx.room:room-runtime:2.6.1'
     annotationProcessor 'androidx.room:room-compiler:2.6.1'

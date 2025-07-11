@@ -1,6 +1,7 @@
 package com.harish.dndscheduler;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
@@ -10,18 +11,16 @@ import android.util.Log;
 import android.view.View;
 import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.select.Elements;
+import java.io.IOException;
 
 import java.io.InputStream;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
+import java.net.HttpCookie;
 import java.util.Calendar;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+
 import okhttp3.*;
 
 public class LoginActivity extends AppCompatActivity {
@@ -34,17 +33,24 @@ public class LoginActivity extends AppCompatActivity {
     private OkHttpClient client;
     private CookieManager cookieManager;
 
-    private String captchaUrl = "";
-    private String baseUrl = "https://webstream.sastra.edu/sastrapwi/";
+    private final ExecutorService executorService = Executors.newFixedThreadPool(2);
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private Handler mainHandler = new Handler(Looper.getMainLooper());
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private static final String BASE_URL = "https://webstream.sastra.edu/sastrapwi/";
+    private static final int CAPTCHA_DELAY_MS = 800; // Increased delay
+    private static final int HUMAN_DELAY_MS = 1200; // Delay between major requests
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
+        initializeViews();
+        setupHttpClient();
+        fetchLoginPageAndCaptcha();
+    }
+
+    private void initializeViews() {
         etRegister = findViewById(R.id.et_register_number);
         etPassword = findViewById(R.id.et_password);
         etCaptcha = findViewById(R.id.et_captcha);
@@ -53,183 +59,478 @@ public class LoginActivity extends AppCompatActivity {
         btnLogin = findViewById(R.id.btn_login);
         progressBar = findViewById(R.id.progress_bar);
 
+        btnRefreshCaptcha.setOnClickListener(v -> {
+            clearCaptcha();
+            fetchLoginPageAndCaptcha();
+        });
+
+        btnLogin.setOnClickListener(v -> {
+            if (validateInputs()) {
+                performLogin();
+            }
+        });
+    }
+
+    private void setupHttpClient() {
         cookieManager = new CookieManager();
         cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
+
         client = new OkHttpClient.Builder()
                 .cookieJar(new JavaNetCookieJar(cookieManager))
+                .connectTimeout(30, TimeUnit.SECONDS) // Increased timeout
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .addInterceptor(new RetryInterceptor(3)) // Increased retries
+                .followRedirects(false) // Handle redirects manually
+                .followSslRedirects(false)
                 .build();
-
-        fetchLoginPageAndCaptcha(); // Initial load
-
-        btnRefreshCaptcha.setOnClickListener(v -> fetchLoginPageAndCaptcha());
-        btnLogin.setOnClickListener(v -> performLogin());
     }
 
     private void fetchLoginPageAndCaptcha() {
-        progressBar.setVisibility(View.VISIBLE);
+        showLoading(true);
 
         executorService.execute(() -> {
             try {
-                // Step 1: GET login page to initiate session
-                Request request = new Request.Builder()
-                        .url(baseUrl)
+                // Step 1: GET login page to initialize session
+                Request loginPageRequest = new Request.Builder()
+                        .url(BASE_URL)
+                        .header("User-Agent", getBrowserUserAgent())
                         .build();
 
-                Response response = client.newCall(request).execute();
-                String html = response.body().string();
-                response.close();
-
-                // Log cookies for debugging
-                List<java.net.HttpCookie> cookies = cookieManager.getCookieStore().getCookies();
-                for (java.net.HttpCookie c : cookies) {
-                    Log.d("CookieDebug", "Cookie after login page GET: " + c.toString());
+                try (Response response = client.newCall(loginPageRequest).execute()) {
+                    logCookies("After login page GET");
                 }
 
-                // Step 2: GET stickyImg once WITHOUT ms to trigger captcha generation
-                Request initCaptchaRequest = new Request.Builder()
-                        .url(baseUrl + "stickyImg")
-                        .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                        .addHeader("Referer", baseUrl)
+                // Step 2: Trigger captcha generation
+                Request captchaInitRequest = new Request.Builder()
+                        .url(BASE_URL + "stickyImg")
+                        .header("User-Agent", getBrowserUserAgent())
+                        .header("Referer", BASE_URL)
                         .build();
 
-                Response initCaptchaResponse = client.newCall(initCaptchaRequest).execute();
-                initCaptchaResponse.close();
-                Log.d("CaptchaDebug", "Initial captcha generation GET done.");
+                try (Response response = client.newCall(captchaInitRequest).execute()) {
+                    logCookies("After captcha init GET");
+                }
 
-                // Small delay to mimic JS timeout
-                Thread.sleep(500);
+                // Small delay to mimic human behavior
+                Thread.sleep(CAPTCHA_DELAY_MS);
 
-                // Step 3: Generate correct ms parameter (0-999)
-                Calendar calendar = Calendar.getInstance();
-                int ms = calendar.get(Calendar.MILLISECOND);
-
-                // Final captcha URL
-                captchaUrl = baseUrl + "stickyImg?ms=" + ms;
-                Log.d("CaptchaDebug", "Final captcha URL: " + captchaUrl);
-
-                // Step 4: Fetch captcha image
+                // Step 3: Fetch captcha image
+                String captchaUrl = BASE_URL + "stickyImg?ms=" + System.currentTimeMillis();
                 Request captchaRequest = new Request.Builder()
                         .url(captchaUrl)
-                        .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                        .addHeader("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-                        .addHeader("Accept-Encoding", "gzip, deflate, br")
-                        .addHeader("Referer", baseUrl)
+                        .header("User-Agent", getBrowserUserAgent())
+                        .header("Accept", "image/webp,image/apng,image/*,*/*;q=0.8")
+                        .header("Referer", BASE_URL)
                         .build();
 
-                Response captchaResponse = client.newCall(captchaRequest).execute();
-                try {
-                    if (!captchaResponse.isSuccessful()) {
-                        Log.d("CaptchaDebug", "Captcha request failed: " + captchaResponse.code());
-                        throw new Exception("Captcha request failed with code " + captchaResponse.code());
-                    }
+                try (Response captchaResponse = client.newCall(captchaRequest).execute()) {
+                    if (captchaResponse.isSuccessful() && captchaResponse.body() != null) {
+                        InputStream is = captchaResponse.body().byteStream();
+                        Bitmap bitmap = BitmapFactory.decodeStream(is);
 
-                    InputStream inputStream = captchaResponse.body().byteStream();
-                    Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-
-                    if (bitmap != null) {
                         mainHandler.post(() -> {
                             imgCaptcha.setImageBitmap(bitmap);
-                            progressBar.setVisibility(View.GONE);
+                            showLoading(false);
                         });
                     } else {
-                        throw new Exception("Bitmap decoding failed (null bitmap)");
+                        throw new Exception("Captcha fetch failed: " + captchaResponse.code());
                     }
-                } finally {
-                    captchaResponse.close();
                 }
-
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e("CaptchaError", "Captcha loading error", e);
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "Error loading captcha. Try again.", Toast.LENGTH_SHORT).show();
-                    progressBar.setVisibility(View.GONE);
+                    showLoading(false);
+                    Toast.makeText(this, "Error loading captcha.", Toast.LENGTH_SHORT).show();
                 });
             }
         });
     }
 
     private void performLogin() {
-        String regNo = etRegister.getText().toString().trim();
-        String password = etPassword.getText().toString().trim();
-        String captcha = etCaptcha.getText().toString().trim();
+        final String regNo = etRegister.getText().toString().trim();
+        final String password = etPassword.getText().toString().trim();
+        final String captcha = etCaptcha.getText().toString().trim();
 
-        if (regNo.isEmpty() || password.isEmpty() || captcha.isEmpty()) {
-            Toast.makeText(this, "Please fill all fields.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        progressBar.setVisibility(View.VISIBLE);
+        showLoading(true);
 
         executorService.execute(() -> {
             try {
-                // Build form body
+                Log.d("LoginFlow", "Step 3: Performing login");
+                logCookies("Before login POST");
+
+                // Human-like delay before login
+                Thread.sleep(500);
+
                 FormBody formBody = new FormBody.Builder()
-                        .add("regno", regNo)
-                        .add("passwd", password)
-                        .add("vrfcd", captcha)
+                        .add("txtRegNumber", regNo)
+                        .add("txtPwd", password)
+                        .add("answer", captcha)
+                        .add("txtPA", "1")
                         .build();
 
-                Request request = new Request.Builder()
-                        .url(baseUrl + "loginValidate")
+                Request loginRequest = new Request.Builder()
+                        .url(BASE_URL)
                         .post(formBody)
-                        .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                        .addHeader("Referer", baseUrl)
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .header("Origin", "https://webstream.sastra.edu")
+                        .header("Referer", BASE_URL)
+                        .header("User-Agent", getBrowserUserAgent())
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                        .header("Accept-Language", "en-US,en;q=0.5")
+                        .header("Accept-Encoding", "gzip, deflate")
+                        .header("DNT", "1")
+                        .header("Connection", "keep-alive")
+                        .header("Upgrade-Insecure-Requests", "1")
                         .build();
 
-                Response response = client.newCall(request).execute();
-                String responseHtml = response.body().string();
-                response.close();
+                try (Response loginResponse = client.newCall(loginRequest).execute()) {
+                    Log.d("LoginFlow", "Login response: " + loginResponse.code());
 
-                if (responseHtml.contains("Invalid") || responseHtml.contains("incorrect")) {
-                    mainHandler.post(() -> {
-                        Toast.makeText(this, "Login failed. Check credentials or captcha.", Toast.LENGTH_SHORT).show();
-                        fetchLoginPageAndCaptcha();
-                        progressBar.setVisibility(View.GONE);
-                    });
-                } else {
-                    // Login successful. Fetch timetable
-                    fetchTimetableAndProceed();
+                    // Handle redirect manually
+                    if (loginResponse.code() == 302) {
+                        String location = loginResponse.header("Location");
+                        Log.d("LoginFlow", "Redirect location: " + location);
+
+                        if (location != null && location.contains("home.jsp")) {
+                            Log.d("LoginFlow", "Login successful - redirecting to home");
+                            // Follow the redirect
+                            followRedirectAndFetchTimetable(location);
+                        } else {
+                            handleLoginFailure("Login failed - unexpected redirect");
+                        }
+                    } else {
+                        String responseBody = loginResponse.body() != null ? loginResponse.body().string() : "";
+                        Log.d("LoginFlow", "Login response body length: " + responseBody.length());
+
+                        if (isLoginSuccessful(loginResponse, responseBody)) {
+                            fetchTimetableAndProceed();
+                        } else {
+                            handleLoginFailure(responseBody);
+                        }
+                    }
                 }
-
             } catch (Exception e) {
-                e.printStackTrace();
+                Log.e("LoginError", "Login error", e);
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "Login error. Retry.", Toast.LENGTH_SHORT).show();
-                    progressBar.setVisibility(View.GONE);
+                    showLoading(false);
+                    Toast.makeText(this, "Login error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    fetchLoginPageAndCaptcha();
                 });
             }
+        });
+    }
+
+    private void followRedirectAndFetchTimetable(String redirectUrl) {
+        try {
+            // Handle relative URLs
+            String fullUrl = redirectUrl.startsWith("http") ? redirectUrl : BASE_URL + redirectUrl;
+
+            Log.d("LoginFlow", "Following redirect to: " + fullUrl);
+
+            Request homeRequest = new Request.Builder()
+                    .url(fullUrl)
+                    .header("User-Agent", getBrowserUserAgent())
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.5")
+                    .header("Accept-Encoding", "gzip, deflate")
+                    .header("DNT", "1")
+                    .header("Connection", "keep-alive")
+                    .header("Upgrade-Insecure-Requests", "1")
+                    .build();
+
+            try (Response homeResponse = client.newCall(homeRequest).execute()) {
+                Log.d("LoginFlow", "Home page response: " + homeResponse.code());
+
+                if (homeResponse.isSuccessful()) {
+                    // Small delay before fetching timetable
+                    Thread.sleep(HUMAN_DELAY_MS);
+                    fetchTimetableAndProceed();
+                } else {
+                    throw new Exception("Home page fetch failed: " + homeResponse.code());
+                }
+            }
+        } catch (Exception e) {
+            Log.e("LoginError", "Redirect handling error", e);
+            mainHandler.post(() -> {
+                showLoading(false);
+                Toast.makeText(this, "Error following redirect: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            });
+        }
+    }
+
+    private boolean isLoginSuccessful(Response response, String body) {
+        // Check for various success indicators
+        boolean hasHomeJsp = body.contains("home.jsp");
+        boolean hasSuccessIndicator = body.contains("welcome") || body.contains("Welcome") || body.contains("dashboard");
+        boolean isRedirectToHome = response.isRedirect() && response.header("Location") != null
+                && response.header("Location").contains("home.jsp");
+
+        // Check for failure indicators
+        boolean hasError = body.toLowerCase().contains("invalid") ||
+                body.toLowerCase().contains("error") ||
+                body.toLowerCase().contains("incorrect");
+
+        return (hasHomeJsp || hasSuccessIndicator || isRedirectToHome) && !hasError;
+    }
+
+    private void handleLoginFailure(String responseBody) {
+        Log.d("LoginFlow", "Login failed. Response body: " + responseBody.substring(0, Math.min(500, responseBody.length())));
+
+        mainHandler.post(() -> {
+            showLoading(false);
+
+            String errorMessage = "Login failed. Please check your credentials.";
+
+            if (responseBody.toLowerCase().contains("captcha")) {
+                errorMessage = "Invalid CAPTCHA. Please try again.";
+            } else if (responseBody.toLowerCase().contains("invalid") || responseBody.toLowerCase().contains("incorrect")) {
+                errorMessage = "Invalid credentials. Please check your registration number and password.";
+            }
+
+            Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+            fetchLoginPageAndCaptcha(); // Refresh captcha
         });
     }
 
     private void fetchTimetableAndProceed() {
         executorService.execute(() -> {
             try {
+                Log.d("LoginFlow", "Step 4: Fetching timetable");
+
                 Request timetableRequest = new Request.Builder()
-                        .url(baseUrl + "student/timetable")
-                        .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                        .addHeader("Referer", baseUrl)
+                        .url(BASE_URL + "academy/frmStudentTimetable.jsp")
+                        .header("User-Agent", getBrowserUserAgent())
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+                        .header("Accept-Language", "en-US,en;q=0.5")
+                        .header("Accept-Encoding", "gzip, deflate")
+                        .header("Referer", BASE_URL + "usermanager/home.jsp")
+                        .header("DNT", "1")
+                        .header("Connection", "keep-alive")
+                        .header("Upgrade-Insecure-Requests", "1")
                         .build();
 
-                Response timetableResponse = client.newCall(timetableRequest).execute();
-                String timetableHtml = timetableResponse.body().string();
-                timetableResponse.close();
+                try (Response response = client.newCall(timetableRequest).execute()) {
+                    Log.d("LoginFlow", "Timetable response: " + response.code());
 
-                // TODO: Parse timetable HTML here and save data as needed
+                    if (response.isSuccessful()) {
+                        String timetableData = response.body() != null ? response.body().string() : "";
+                        Log.d("TimetableDebug", "Timetable HTML length: " + timetableData.length());
 
+                        // Debug: Log first 1000 characters of HTML for inspection
+                        if (timetableData.length() > 0) {
+                            int previewLength = Math.min(1000, timetableData.length());
+                            Log.d("TimetableDebug", "Timetable HTML preview: " + timetableData.substring(0, previewLength));
+                        }
+
+                        // ✅ Store the timetable data in SharedPreferences
+                        SharedPreferences prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
+                        boolean saved = prefs.edit()
+                                .putString("timetable_html", timetableData)
+                                .putLong("timetable_fetch_time", System.currentTimeMillis())
+                                .commit();
+
+                        Log.d("TimetableDebug", "Timetable data saved to SharedPreferences: " + saved);
+
+                        // ✅ Validate that we actually have timetable content
+                        boolean hasValidTimetable = validateTimetableData(timetableData);
+                        Log.d("TimetableDebug", "Has valid timetable: " + hasValidTimetable);
+
+                        // ✅ Try to parse and count time slots immediately
+                        List<ClassTimeSlot> parsedSlots = TimetableStore.getClassTimeSlots(this);
+                        Log.d("TimetableDebug", "Parsed " + parsedSlots.size() + " time slots");
+
+                        // ✅ Update UI on main thread
+                        mainHandler.post(() -> {
+                            showLoading(false);
+
+                            if (hasValidTimetable) {
+                                String successMessage = "Timetable fetched successfully!";
+                                if (parsedSlots.size() > 0) {
+                                    successMessage += " (" + parsedSlots.size() + " classes found)";
+                                }
+                                Toast.makeText(this, successMessage, Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(this, "Timetable fetched but may be empty", Toast.LENGTH_SHORT).show();
+                            }
+
+                            // ✅ Proceed to MainActivity
+                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                            intent.putExtra("timetable_data", timetableData);
+                            intent.putExtra("has_valid_timetable", hasValidTimetable);
+                            intent.putExtra("parsed_slots_count", parsedSlots.size());
+                            startActivity(intent);
+                            finish();
+                        });
+
+                    } else {
+                        // ✅ Handle unsuccessful response
+                        String errorBody = "";
+                        if (response.body() != null) {
+                            errorBody = response.body().string();
+                        }
+
+                        Log.e("TimetableError", "Timetable fetch failed: " + response.code() + " - " + response.message());
+                        Log.e("TimetableError", "Error body: " + errorBody.substring(0, Math.min(500, errorBody.length())));
+
+                        throw new Exception("Timetable fetch failed: " + response.code() + " - " + response.message());
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("TimetableError", "Timetable fetch error", e);
                 mainHandler.post(() -> {
-                    progressBar.setVisibility(View.GONE);
+                    showLoading(false);
+
+                    String errorMessage = "Error fetching timetable: " + e.getMessage();
+
+                    // ✅ Provide more specific error messages
+                    if (e.getMessage().contains("timeout")) {
+                        errorMessage = "Timetable fetch timed out. Please try again.";
+                    } else if (e.getMessage().contains("404")) {
+                        errorMessage = "Timetable page not found. Please contact support.";
+                    } else if (e.getMessage().contains("403")) {
+                        errorMessage = "Access denied to timetable. Please login again.";
+                    }
+
+                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+
+                    // ✅ Option to continue to MainActivity even if timetable fetch fails
+                    // This allows user to potentially re-login or try again
                     Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                    intent.putExtra("timetable_data", "");
+                    intent.putExtra("has_valid_timetable", false);
+                    intent.putExtra("timetable_error", errorMessage);
                     startActivity(intent);
                     finish();
                 });
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                mainHandler.post(() -> {
-                    Toast.makeText(this, "Error fetching timetable.", Toast.LENGTH_SHORT).show();
-                    progressBar.setVisibility(View.GONE);
-                });
             }
         });
+    }
+
+    /**
+     * ✅ Helper method to validate timetable data
+     */
+    private boolean validateTimetableData(String timetableHtml) {
+        if (timetableHtml == null || timetableHtml.trim().isEmpty()) {
+            Log.d("TimetableValidation", "Timetable HTML is null or empty");
+            return false;
+        }
+
+        // Check for common timetable indicators
+        boolean hasTable = timetableHtml.toLowerCase().contains("<table") ||
+                timetableHtml.toLowerCase().contains("timetable");
+
+        boolean hasTimeFormat = timetableHtml.matches(".*\\d{1,2}:\\d{2}.*") || // HH:MM format
+                timetableHtml.matches(".*\\d{1,2}\\s*[AP]M.*"); // AM/PM format
+
+        boolean hasClassInfo = timetableHtml.toLowerCase().contains("class") ||
+                timetableHtml.toLowerCase().contains("subject") ||
+                timetableHtml.toLowerCase().contains("period");
+
+        Log.d("TimetableValidation", "Has table: " + hasTable);
+        Log.d("TimetableValidation", "Has time format: " + hasTimeFormat);
+        Log.d("TimetableValidation", "Has class info: " + hasClassInfo);
+
+        return hasTable && (hasTimeFormat || hasClassInfo);
+    }
+
+    // Utility methods
+    private void showLoading(boolean show) {
+        progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
+        btnLogin.setEnabled(!show);
+        btnRefreshCaptcha.setEnabled(!show);
+    }
+
+    private boolean validateInputs() {
+        if (etRegister.getText().toString().trim().isEmpty()) {
+            etRegister.setError("Registration number is required");
+            etRegister.requestFocus();
+            return false;
+        }
+        if (etPassword.getText().toString().trim().isEmpty()) {
+            etPassword.setError("Password is required");
+            etPassword.requestFocus();
+            return false;
+        }
+        if (etCaptcha.getText().toString().trim().isEmpty()) {
+            etCaptcha.setError("CAPTCHA is required");
+            etCaptcha.requestFocus();
+            return false;
+        }
+        return true;
+    }
+
+    private void clearCaptcha() {
+        etCaptcha.setText("");
+        imgCaptcha.setImageBitmap(null);
+    }
+
+    private String getBrowserUserAgent() {
+        // Use the same mobile user agent as your original code
+        return "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
+    }
+
+    private void logCookies(String context) {
+        List<HttpCookie> cookies = cookieManager.getCookieStore().getCookies();
+        Log.d("CookieDebug", context + " - Total cookies: " + cookies.size());
+        for (HttpCookie c : cookies) {
+            Log.d("CookieDebug", context + ": " + c.getName() + "=" + c.getValue());
+        }
+    }
+
+    // Enhanced Retry Interceptor
+    private static class RetryInterceptor implements Interceptor {
+        private final int maxRetries;
+
+        RetryInterceptor(int maxRetries) {
+            this.maxRetries = maxRetries;
+        }
+
+        @Override
+        public Response intercept(Chain chain) throws IOException {
+            Request request = chain.request();
+            Response response = null;
+            IOException exception = null;
+
+            for (int i = 0; i <= maxRetries; i++) {
+                try {
+                    response = chain.proceed(request);
+
+                    // Don't retry on client errors (4xx) except for specific cases
+                    if (response.code() >= 400 && response.code() < 500 && response.code() != 429) {
+                        return response;
+                    }
+
+                    if (response.isSuccessful() || response.code() == 302) {
+                        return response;
+                    }
+
+                } catch (IOException e) {
+                    exception = e;
+                    Log.w("RetryInterceptor", "Attempt " + (i + 1) + " failed: " + e.getMessage());
+                }
+
+                if (i < maxRetries) {
+                    try {
+                        // Exponential backoff
+                        long delay = (long) (1000 * Math.pow(2, i));
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+
+            if (exception != null) throw exception;
+            if (response != null) return response;
+            throw new IOException("Maximum retries exceeded");
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        executorService.shutdown();
     }
 }

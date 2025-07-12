@@ -4,9 +4,12 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
@@ -28,6 +31,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvCurrentTime;
     private TextView tvNextClass;
     private TextView tvTimetableStatus;
+    private TextView tvServiceStatus;
     private Button btnToggleDnd;
     private Button btnRefreshTimetable;
     private Button btnCheckNow;
@@ -49,6 +53,9 @@ public class MainActivity extends AppCompatActivity {
 
         rvTodayClasses.setLayoutManager(new LinearLayoutManager(this));
         checkCurrentDndStatus();
+
+        // Request battery optimization exemption on first run
+        requestBatteryOptimizationExemption();
     }
 
     private void initializeViews() {
@@ -56,6 +63,7 @@ public class MainActivity extends AppCompatActivity {
         tvCurrentTime = findViewById(R.id.tv_current_time);
         tvNextClass = findViewById(R.id.tv_next_class);
         tvTimetableStatus = findViewById(R.id.tv_timetable_status);
+        tvServiceStatus = findViewById(R.id.tv_service_status);
         btnToggleDnd = findViewById(R.id.btn_toggle_dnd);
         btnRefreshTimetable = findViewById(R.id.btn_refresh_timetable);
         btnCheckNow = findViewById(R.id.btn_check_now);
@@ -81,6 +89,49 @@ public class MainActivity extends AppCompatActivity {
                 updateHandler.postDelayed(this, 30000);
             }
         };
+    }
+
+    private void requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent intent = new Intent();
+            String packageName = getPackageName();
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                intent.setData(Uri.parse("package:" + packageName));
+                try {
+                    startActivity(intent);
+                    Toast.makeText(this, "Please allow app to run in background for reliable DND scheduling", Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error requesting battery optimization exemption", e);
+                }
+            }
+        }
+    }
+
+    private void enableDNDScheduling() {
+        // Request battery optimization exemption
+        requestBatteryOptimizationExemption();
+
+        // Schedule DND for classes
+        dndManager.scheduleDndForClasses();
+
+        // Start foreground service for reliable background operation
+        DNDService.startService(this);
+
+
+        Toast.makeText(this, "DND scheduling enabled with background service", Toast.LENGTH_SHORT).show();
+    }
+
+    private void disableDNDScheduling() {
+        // Cancel all DND schedules
+        dndManager.cancelDndSchedules();
+
+        // Stop foreground service
+        DNDService.stopService(this);
+
+        Toast.makeText(this, "DND scheduling disabled", Toast.LENGTH_SHORT).show();
     }
 
     private void checkCurrentDndStatus() {
@@ -125,11 +176,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (isCurrentlyEnabled) {
-            dndManager.cancelDndSchedules();
-            Toast.makeText(this, "DND auto scheduling disabled.", Toast.LENGTH_SHORT).show();
+            disableDNDScheduling();
         } else {
-            dndManager.scheduleDndForClasses();
-            Toast.makeText(this, "DND auto scheduling enabled for " + classSlots.size() + " classes.", Toast.LENGTH_SHORT).show();
+            enableDNDScheduling();
         }
 
         updateUI();
@@ -157,16 +206,32 @@ public class MainActivity extends AppCompatActivity {
         if (isSchedulingEnabled) {
             btnToggleDnd.setText("Disable Auto DND");
             btnToggleDnd.setBackgroundColor(getResources().getColor(android.R.color.holo_red_light));
+            tvServiceStatus.setText("✓ Background service active");
+            tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
         } else {
             btnToggleDnd.setText("Enable Auto DND");
             btnToggleDnd.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
+            tvServiceStatus.setText("✗ Background service inactive");
+            tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
         }
 
         updateNextClassInfo();
+        updateBatteryOptimizationStatus();
 
         List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
         List<ClassTimeSlot> todaySlots = getTodaySlots(allSlots);
         rvTodayClasses.setAdapter(new ClassSlotAdapter(todaySlots));
+    }
+
+    private void updateBatteryOptimizationStatus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            boolean isIgnoringBatteryOptimizations = pm.isIgnoringBatteryOptimizations(getPackageName());
+
+            if (!isIgnoringBatteryOptimizations) {
+                Toast.makeText(this, "⚠️ Battery optimization is enabled. DND scheduling may not work reliably.", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private void updateCurrentTimeDisplay() {

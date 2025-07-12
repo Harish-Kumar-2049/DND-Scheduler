@@ -5,201 +5,321 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String TAG = "MainActivity";
-
     private TextView tvDndStatus;
+    private TextView tvCurrentTime;
+    private TextView tvNextClass;
+    private TextView tvTimetableStatus;
     private Button btnToggleDnd;
-    private Button btnDebugTimetable;
-    private TextView tvTimetableInfo;
-    private boolean isDndOn = false;
+    private Button btnRefreshTimetable;
+    private Button btnCheckNow;
+    private RecyclerView rvTodayClasses;
 
     private SharedPreferences prefs;
     private DNDManager dndManager;
+    private Handler updateHandler;
+    private Runnable updateRunnable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        try {
-            initializeViews();
-            loadPreferences();
-            setupDNDManager();
-            updateUI();
-            processIntentData();
-        } catch (Exception e) {
-            Log.e(TAG, "Error in onCreate", e);
-            Toast.makeText(this, "Error initializing app: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+        initializeViews();
+        setupManagers();
+        setupUpdateHandler();
+
+        rvTodayClasses.setLayoutManager(new LinearLayoutManager(this));
+        checkCurrentDndStatus();
     }
 
     private void initializeViews() {
         tvDndStatus = findViewById(R.id.tv_dnd_status);
+        tvCurrentTime = findViewById(R.id.tv_current_time);
+        tvNextClass = findViewById(R.id.tv_next_class);
+        tvTimetableStatus = findViewById(R.id.tv_timetable_status);
         btnToggleDnd = findViewById(R.id.btn_toggle_dnd);
+        btnRefreshTimetable = findViewById(R.id.btn_refresh_timetable);
+        btnCheckNow = findViewById(R.id.btn_check_now);
+        rvTodayClasses = findViewById(R.id.rv_today_classes);
 
-        // Optional: Add debug button to your layout
-        btnDebugTimetable = findViewById(R.id.btn_debug_timetable);
-        tvTimetableInfo = findViewById(R.id.tv_timetable_info);
-
-        if (btnDebugTimetable != null) {
-            btnDebugTimetable.setOnClickListener(v -> debugTimetable());
-        }
-
-        btnToggleDnd.setOnClickListener(v -> toggleDnd());
+        btnToggleDnd.setOnClickListener(v -> toggleDndScheduling());
+        btnRefreshTimetable.setOnClickListener(v -> refreshTimetable());
+        btnCheckNow.setOnClickListener(v -> checkCurrentDndStatus());
     }
 
-    private void loadPreferences() {
+    private void setupManagers() {
         prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
-        isDndOn = prefs.getBoolean("is_dnd_on", false);
-        Log.d(TAG, "Loaded DND state: " + isDndOn);
-    }
-
-    private void setupDNDManager() {
         dndManager = new DNDManager(this);
     }
 
-    private void processIntentData() {
-        try {
-            Intent intent = getIntent();
-            if (intent != null) {
-                String timetableData = intent.getStringExtra("timetable_data");
-                boolean hasValidTimetable = intent.getBooleanExtra("has_valid_timetable", false);
-                int parsedSlotsCount = intent.getIntExtra("parsed_slots_count", 0);
-                String timetableError = intent.getStringExtra("timetable_error");
-
-                Log.d(TAG, "Intent data - Valid timetable: " + hasValidTimetable + ", Slots: " + parsedSlotsCount);
-
-                if (timetableError != null) {
-                    Log.w(TAG, "Timetable error from LoginActivity: " + timetableError);
-                    showTimetableInfo("Error: " + timetableError);
-                } else if (hasValidTimetable && parsedSlotsCount > 0) {
-                    showTimetableInfo("Found " + parsedSlotsCount + " class slots");
-                } else {
-                    showTimetableInfo("No valid timetable found");
-                }
+    private void setupUpdateHandler() {
+        updateHandler = new Handler(Looper.getMainLooper());
+        updateRunnable = new Runnable() {
+            @Override
+            public void run() {
+                updateCurrentTimeDisplay();
+                updateUI();
+                updateHandler.postDelayed(this, 30000);
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Error processing intent data", e);
-        }
+        };
     }
 
-    private void toggleDnd() {
-        try {
-            if (!hasDndAccess()) {
-                Toast.makeText(this, "Grant Do Not Disturb access in settings.", Toast.LENGTH_LONG).show();
-                startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
-                return;
-            }
-
-            // Check if we have timetable data
-            List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(this);
-            if (slots.isEmpty()) {
-                Toast.makeText(this, "No timetable data available. Please login again.", Toast.LENGTH_LONG).show();
-                // Optionally, redirect to LoginActivity
-                startActivity(new Intent(this, LoginActivity.class));
-                return;
-            }
-
-            isDndOn = !isDndOn;
-
-            if (isDndOn) {
-                // Schedule DND ON/OFF based on timetable
-                dndManager.scheduleDndForClasses();
-                Toast.makeText(this, "DND auto scheduling enabled for " + slots.size() + " classes.", Toast.LENGTH_SHORT).show();
-            } else {
-                // Cancel scheduled DND and turn off if currently on
-                dndManager.cancelDndSchedules();
-                dndManager.setDndOff();
-                Toast.makeText(this, "DND auto scheduling disabled.", Toast.LENGTH_SHORT).show();
-            }
-
-            // Save state
-            prefs.edit().putBoolean("is_dnd_on", isDndOn).apply();
-            updateUI();
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error toggling DND", e);
-            Toast.makeText(this, "Error toggling DND: " + e.getMessage(), Toast.LENGTH_LONG).show();
+    private void checkCurrentDndStatus() {
+        if (!hasDndAccess()) {
+            showDndAccessRequired();
+            return;
         }
+
+        List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
+        List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
+
+        for (ClassTimeSlot slot : classSlots) {
+            String time = new SimpleDateFormat("h:mm a", Locale.getDefault()).format(new Date(slot.getStartMillis())) +
+                    " - " + new SimpleDateFormat("h:mm a", Locale.getDefault()).format(new Date(slot.getEndMillis()));
+            Log.d("TodaySlotDetail", time + " => " + slot.getSubject());
+        }
+
+        if (classSlots.isEmpty()) {
+            showNoTimetableData();
+            return;
+        }
+
+        dndManager.checkAndSetCurrentDndStatus(classSlots);
+        updateUI();
+        updateTimetableStatus(classSlots);
+    }
+
+    private void toggleDndScheduling() {
+        if (!hasDndAccess()) {
+            showDndAccessRequired();
+            return;
+        }
+
+        boolean isCurrentlyEnabled = dndManager.isDndSchedulingEnabled();
+
+        List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
+        List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
+
+        if (classSlots.isEmpty()) {
+            showNoTimetableData();
+            return;
+        }
+
+        if (isCurrentlyEnabled) {
+            dndManager.cancelDndSchedules();
+            Toast.makeText(this, "DND auto scheduling disabled.", Toast.LENGTH_SHORT).show();
+        } else {
+            dndManager.scheduleDndForClasses();
+            Toast.makeText(this, "DND auto scheduling enabled for " + classSlots.size() + " classes.", Toast.LENGTH_SHORT).show();
+        }
+
+        updateUI();
+    }
+
+    private void refreshTimetable() {
+        Toast.makeText(this, "Redirecting to login for fresh timetable...", Toast.LENGTH_SHORT).show();
+        Intent intent = new Intent(this, LoginActivity.class);
+        startActivity(intent);
+        finish();
     }
 
     private void updateUI() {
-        try {
-            if (isDndOn) {
-                tvDndStatus.setText("DND Auto-Scheduling is ON");
-                btnToggleDnd.setText("Turn OFF DND Auto-Scheduling");
-            } else {
-                tvDndStatus.setText("DND Auto-Scheduling is OFF");
-                btnToggleDnd.setText("Turn ON DND Auto-Scheduling");
+        boolean isSchedulingEnabled = dndManager.isDndSchedulingEnabled();
+        boolean isDndCurrentlyOn = dndManager.isDndCurrentlyOn();
+
+        if (isDndCurrentlyOn) {
+            tvDndStatus.setText("DND is ON");
+            tvDndStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+        } else {
+            tvDndStatus.setText("DND is OFF");
+            tvDndStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+        }
+
+        if (isSchedulingEnabled) {
+            btnToggleDnd.setText("Disable Auto DND");
+            btnToggleDnd.setBackgroundColor(getResources().getColor(android.R.color.holo_red_light));
+        } else {
+            btnToggleDnd.setText("Enable Auto DND");
+            btnToggleDnd.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
+        }
+
+        updateNextClassInfo();
+
+        List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
+        List<ClassTimeSlot> todaySlots = getTodaySlots(allSlots);
+        rvTodayClasses.setAdapter(new ClassSlotAdapter(todaySlots));
+    }
+
+    private void updateCurrentTimeDisplay() {
+        Calendar now = Calendar.getInstance();
+        String currentTime = String.format("Current Time: %02d:%02d",
+                now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
+        tvCurrentTime.setText(currentTime);
+    }
+
+    private void updateNextClassInfo() {
+        List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
+        List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
+
+        if (classSlots.isEmpty()) {
+            tvNextClass.setText("No timetable data available");
+            return;
+        }
+
+        Calendar now = Calendar.getInstance();
+        int currentTimeInMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+
+        String currentClassInfo = getCurrentClassInfo(classSlots, currentTimeInMinutes);
+        if (!currentClassInfo.isEmpty()) {
+            tvNextClass.setText("Current Class: " + currentClassInfo);
+            tvNextClass.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            return;
+        }
+
+        String nextClassInfo = getNextClassInfo(classSlots, currentTimeInMinutes);
+        if (!nextClassInfo.isEmpty()) {
+            tvNextClass.setText("Next Class: " + nextClassInfo);
+            tvNextClass.setTextColor(getResources().getColor(android.R.color.holo_blue_dark));
+        } else {
+            tvNextClass.setText("No more classes today");
+            tvNextClass.setTextColor(getResources().getColor(android.R.color.darker_gray));
+        }
+    }
+
+    private String getCurrentClassInfo(List<ClassTimeSlot> classSlots, int currentTimeInMinutes) {
+        for (ClassTimeSlot slot : classSlots) {
+            Calendar startCal = Calendar.getInstance();
+            startCal.setTimeInMillis(slot.getStartMillis());
+            int startTimeInMinutes = startCal.get(Calendar.HOUR_OF_DAY) * 60 + startCal.get(Calendar.MINUTE);
+
+            Calendar endCal = Calendar.getInstance();
+            endCal.setTimeInMillis(slot.getEndMillis());
+            int endTimeInMinutes = endCal.get(Calendar.HOUR_OF_DAY) * 60 + endCal.get(Calendar.MINUTE);
+
+            if (currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes <= endTimeInMinutes) {
+                return String.format("%02d:%02d - %02d:%02d",
+                        startCal.get(Calendar.HOUR_OF_DAY), startCal.get(Calendar.MINUTE),
+                        endCal.get(Calendar.HOUR_OF_DAY), endCal.get(Calendar.MINUTE));
             }
-
-            // Update timetable info
-            updateTimetableInfo();
-        } catch (Exception e) {
-            Log.e(TAG, "Error updating UI", e);
         }
+        return "";
     }
 
-    private void updateTimetableInfo() {
-        try {
-            List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(this);
-            String info = "Classes found: " + slots.size();
+    private String getNextClassInfo(List<ClassTimeSlot> classSlots, int currentTimeInMinutes) {
+        int nextStartTime = Integer.MAX_VALUE;
+        String nextClassInfo = "";
 
-            if (slots.isEmpty()) {
-                info += "\nNo timetable data available";
+        for (ClassTimeSlot slot : classSlots) {
+            Calendar startCal = Calendar.getInstance();
+            startCal.setTimeInMillis(slot.getStartMillis());
+            int startTimeInMinutes = startCal.get(Calendar.HOUR_OF_DAY) * 60 + startCal.get(Calendar.MINUTE);
+
+            Calendar endCal = Calendar.getInstance();
+            endCal.setTimeInMillis(slot.getEndMillis());
+
+            if (startTimeInMinutes > currentTimeInMinutes && startTimeInMinutes < nextStartTime) {
+                nextStartTime = startTimeInMinutes;
+                nextClassInfo = String.format("%02d:%02d - %02d:%02d",
+                        startCal.get(Calendar.HOUR_OF_DAY), startCal.get(Calendar.MINUTE),
+                        endCal.get(Calendar.HOUR_OF_DAY), endCal.get(Calendar.MINUTE));
             }
+        }
 
-            showTimetableInfo(info);
-        } catch (Exception e) {
-            Log.e(TAG, "Error updating timetable info", e);
-            showTimetableInfo("Error loading timetable info");
+        return nextClassInfo;
+    }
+
+    private void updateTimetableStatus(List<ClassTimeSlot> classSlots) {
+        long fetchTime = prefs.getLong("timetable_fetch_time", 0);
+
+        if (fetchTime == 0) {
+            tvTimetableStatus.setText("No timetable data");
+            tvTimetableStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+        } else {
+            Calendar fetchCal = Calendar.getInstance();
+            fetchCal.setTimeInMillis(fetchTime);
+
+            String statusText = String.format("Timetable: %d classes found\nLast updated: %02d:%02d",
+                    classSlots.size(),
+                    fetchCal.get(Calendar.HOUR_OF_DAY),
+                    fetchCal.get(Calendar.MINUTE));
+
+            tvTimetableStatus.setText(statusText);
+            tvTimetableStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
         }
     }
 
-    private void showTimetableInfo(String info) {
-        if (tvTimetableInfo != null) {
-            tvTimetableInfo.setText(info);
-        }
+    private void showDndAccessRequired() {
+        Toast.makeText(this, "Grant Do Not Disturb access in settings.", Toast.LENGTH_LONG).show();
+        tvDndStatus.setText("⚠️ DND Access Required");
+        tvDndStatus.setTextColor(getResources().getColor(android.R.color.holo_orange_dark));
+        startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
     }
 
-    private void debugTimetable() {
-        try {
-            TimetableStore.debugTimetableHtml(this);
-            Toast.makeText(this, "Check logs for timetable debug info", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Log.e(TAG, "Error in debug timetable", e);
-            Toast.makeText(this, "Error debugging timetable: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+    private void showNoTimetableData() {
+        Toast.makeText(this, "No timetable data found. Please refresh timetable.", Toast.LENGTH_LONG).show();
+        tvTimetableStatus.setText("❌ No timetable data available");
+        tvTimetableStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
     }
 
     private boolean hasDndAccess() {
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            return nm != null && nm.isNotificationPolicyAccessGranted();
-        } catch (Exception e) {
-            Log.e(TAG, "Error checking DND access", e);
-            return false;
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        return nm.isNotificationPolicyAccessGranted();
+    }
+
+    private List<ClassTimeSlot> getTodaySlots(List<ClassTimeSlot> allSlots) {
+        List<ClassTimeSlot> todaySlots = new ArrayList<>();
+        Calendar today = Calendar.getInstance();
+        int todayDay = today.get(Calendar.DAY_OF_WEEK);
+
+        for (ClassTimeSlot slot : allSlots) {
+            Calendar slotCal = Calendar.getInstance();
+            slotCal.setTimeInMillis(slot.getStartMillis());
+            if (slotCal.get(Calendar.DAY_OF_WEEK) == todayDay) {
+                todaySlots.add(slot);
+            }
         }
+
+        Log.d("TodaySlots", "Found " + todaySlots.size() + " slots for today");
+        return todaySlots;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        try {
-            // Refresh DND access status when returning to activity
-            updateUI();
-        } catch (Exception e) {
-            Log.e(TAG, "Error in onResume", e);
+        updateHandler.post(updateRunnable);
+        checkCurrentDndStatus();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        updateHandler.removeCallbacks(updateRunnable);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (updateHandler != null) {
+            updateHandler.removeCallbacks(updateRunnable);
         }
     }
 }

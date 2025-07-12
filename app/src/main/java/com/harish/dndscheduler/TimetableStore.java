@@ -5,159 +5,175 @@ import android.content.SharedPreferences;
 import android.util.Log;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class TimetableStore {
 
-    private static final String TAG = "TimetableStore";
-
     public static List<ClassTimeSlot> getClassTimeSlots(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
+        String html = prefs.getString("timetable_html", "");
+
+        Log.d("TimetableStore", "Starting to parse timetable HTML, length: " + html.length());
+
         List<ClassTimeSlot> slots = new ArrayList<>();
 
-        try {
-            if (context == null) {
-                Log.e(TAG, "Context is null");
-                return slots;
-            }
-
-            SharedPreferences prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
-            String timetableHtml = prefs.getString("timetable_html", "");
-
-            if (timetableHtml.isEmpty()) {
-                Log.d(TAG, "No timetable data found in SharedPreferences");
-                return slots;
-            }
-
-            Log.d(TAG, "Parsing timetable HTML of length: " + timetableHtml.length());
-            slots = parseTimetableHtml(timetableHtml);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error getting class time slots", e);
-        }
-
-        return slots;
-    }
-
-    private static List<ClassTimeSlot> parseTimetableHtml(String html) {
-        List<ClassTimeSlot> slots = new ArrayList<>();
+        if (html.isEmpty()) return slots;
 
         try {
-            if (html == null || html.trim().isEmpty()) {
-                Log.w(TAG, "HTML is null or empty");
-                return slots;
+            // Step 1: Extract all time ranges (08:45-09:45, etc.)
+            List<String> timeRanges = new ArrayList<>();
+            Matcher timeMatcher = Pattern.compile("class=['\"]TDtimetableHour['\"]>(\\d{2}:\\d{2}-\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE).matcher(html);
+            while (timeMatcher.find()) {
+                timeRanges.add(timeMatcher.group(1));
             }
+            Log.d("TimetableStore", "Found " + timeRanges.size() + " time slots");
 
-            // Multiple patterns to catch different time formats
-            List<Pattern> timePatterns = new ArrayList<>();
+            // Step 2: Extract current day's name
+            String[] daysShort = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+            Calendar cal = Calendar.getInstance();
+            String today = daysShort[cal.get(Calendar.DAY_OF_WEEK) - 1];
 
-            // Pattern 1: HH:MM-HH:MM (24-hour format)
-            timePatterns.add(Pattern.compile("(\\d{1,2}:\\d{2})\\s*-\\s*(\\d{1,2}:\\d{2})"));
-
-            // Pattern 2: HH:MM AM/PM - HH:MM AM/PM
-            timePatterns.add(Pattern.compile("(\\d{1,2}:\\d{2})\\s*(AM|PM)\\s*-\\s*(\\d{1,2}:\\d{2})\\s*(AM|PM)", Pattern.CASE_INSENSITIVE));
-
-            // Pattern 3: Look for table data with time patterns
-            timePatterns.add(Pattern.compile("<td[^>]*>\\s*(\\d{1,2}:\\d{2})\\s*-\\s*(\\d{1,2}:\\d{2})\\s*</td>", Pattern.CASE_INSENSITIVE));
-
-            for (Pattern pattern : timePatterns) {
-                Matcher matcher = pattern.matcher(html);
-
-                while (matcher.find()) {
-                    try {
-                        String startTime, endTime;
-
-                        if (matcher.groupCount() >= 4) {
-                            // AM/PM format
-                            startTime = matcher.group(1) + " " + matcher.group(2);
-                            endTime = matcher.group(3) + " " + matcher.group(4);
-                        } else {
-                            // 24-hour format
-                            startTime = matcher.group(1);
-                            endTime = matcher.group(2);
-                        }
-
-                        // Convert to milliseconds
-                        long startMillis = timeToMillis(startTime);
-                        long endMillis = timeToMillis(endTime);
-
-                        if (startMillis > 0 && endMillis > 0 && endMillis > startMillis) {
-                            slots.add(new ClassTimeSlot(startMillis, endMillis));
-                            Log.d(TAG, "Added slot: " + startTime + " - " + endTime);
-                        } else {
-                            Log.w(TAG, "Invalid time slot: " + startTime + " - " + endTime);
-                        }
-                    } catch (Exception e) {
-                        Log.w(TAG, "Error parsing individual time slot", e);
+            // Step 3: Match today's row
+            Pattern rowPattern = Pattern.compile(
+                    "<tr>\\s*<td[^>]*><font[^>]*><b>" + today + "</b></font></td>(.*?)</tr>",
+                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+            );
+            Matcher rowMatcher = rowPattern.matcher(html);
+            if (rowMatcher.find()) {
+                String rowContent = rowMatcher.group(1);
+                Matcher classMatcher = Pattern.compile("<td[^>]*>\\s*<font[^>]*>(.*?)</font>\\s*</td>", Pattern.CASE_INSENSITIVE).matcher(rowContent);
+                int index = 0;
+                while (classMatcher.find()) {
+                    String code = classMatcher.group(1).trim();
+                    if (!code.isEmpty() && index < timeRanges.size()) {
+                        String[] parts = timeRanges.get(index).split("-");
+                        long start = timeToMillis(parts[0]);
+                        long end = timeToMillis(parts[1]);
+                        slots.add(new ClassTimeSlot(start, end, code));
+                        Log.d("TimetableStore", "Added " + code + " at " + timeRanges.get(index));
                     }
+                    index++;
                 }
             }
 
-            // Remove duplicates
-            slots = removeDuplicateSlots(slots);
-
+            Log.d("TimetableStore", "Parsed total " + slots.size() + " valid slots for today");
         } catch (Exception e) {
-            Log.e(TAG, "Error parsing timetable HTML", e);
+            Log.e("TimetableStore", "Error parsing timetable", e);
         }
 
-        Log.d(TAG, "Successfully parsed " + slots.size() + " time slots");
+        return slots;
+    }
+    private static List<ClassTimeSlot> parseTableWithSubjects(String html) {
+        List<ClassTimeSlot> slots = new ArrayList<>();
+
+        try {
+            // Extract time slots from the second header row (class="TDtimetableHour")
+            List<String> timeRanges = new ArrayList<>();
+            Pattern timePattern = Pattern.compile("<td[^>]*class\\s*=\\s*\"TDtimetableHour\"[^>]*>(.*?)</td>", Pattern.CASE_INSENSITIVE);
+            Matcher timeMatcher = timePattern.matcher(html);
+
+            Log.d("TimetableStore", "Trying to match time slot pattern");
+            int matchCount = 0;
+            while (timeMatcher.find()) {
+                String time = timeMatcher.group(1).trim();
+                timeRanges.add(time);
+                Log.d("TimetableStore", "Matched time slot: " + time);
+                matchCount++;
+            }
+            Log.d("TimetableStore", "Matched " + matchCount + " time slots");
+            while (timeMatcher.find()) {
+                timeRanges.add(timeMatcher.group(1).trim());
+            }
+
+            Log.d("TimetableStore", "Found " + timeRanges.size() + " time slots");
+
+            // Get today's day abbreviation (Mon, Tue, etc.)
+            Calendar cal = Calendar.getInstance();
+            String todayName = getDayName(cal.get(Calendar.DAY_OF_WEEK)); // e.g. "Fri"
+
+            // Regex to find the correct day row (e.g. <td class="tabletitle06"><font><b>Fri</b></font></td>)
+            Pattern rowPattern = Pattern.compile(
+                    "<tr>\\s*<td[^>]*class\\s*=\\s*\"tabletitle06\"[^>]*>\\s*<font[^>]*>\\s*<b>" + todayName + "</b>\\s*</font>\\s*</td>(.*?)</tr>",
+                    Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+            );
+
+            Matcher rowMatcher = rowPattern.matcher(html);
+            if (!rowMatcher.find()) {
+                Log.w("TimetableStore", "No row found for today: " + todayName);
+                return slots;
+            }
+
+            String rowCells = rowMatcher.group(1); // All <td> cells for that day
+            Matcher classMatcher = Pattern.compile("<td[^>]*>\\s*<font[^>]*>(.*?)</font>\\s*</td>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(rowCells);
+
+            List<String> codes = new ArrayList<>();
+            while (classMatcher.find()) {
+                String content = classMatcher.group(1).trim();
+                codes.add(content); // Might be "" or "CSE304-D"
+            }
+
+            for (int i = 0; i < codes.size() && i < timeRanges.size(); i++) {
+                String code = codes.get(i);
+                if (code.isEmpty()) continue;
+
+                String subject = code; // Until we parse subject mapping table
+                long[] times = parseTimeRange(timeRanges.get(i));
+                if (times[0] > 0 && times[1] > 0 && times[1] > times[0]) {
+                    slots.add(new ClassTimeSlot(times[0], times[1], subject));
+                    Log.d("TimetableStore", timeRanges.get(i) + " => " + subject);
+                }
+            }
+
+        } catch (Exception e) {
+            Log.e("TimetableStore", "Error parsing timetable", e);
+        }
+
+        Log.d("TimetableStore", "Parsed total " + slots.size() + " valid slots for today");
         return slots;
     }
 
-    private static List<ClassTimeSlot> removeDuplicateSlots(List<ClassTimeSlot> slots) {
-        List<ClassTimeSlot> uniqueSlots = new ArrayList<>();
 
-        for (ClassTimeSlot slot : slots) {
-            boolean isDuplicate = false;
-            for (ClassTimeSlot existing : uniqueSlots) {
-                if (existing.getStartMillis() == slot.getStartMillis() &&
-                        existing.getEndMillis() == slot.getEndMillis()) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (!isDuplicate) {
-                uniqueSlots.add(slot);
-            }
+    private static long[] parseTimeRange(String range) {
+        try {
+            String[] parts = range.split("[-–~to]+");
+            if (parts.length != 2) return new long[]{0, 0};
+            return new long[]{timeToMillis(parts[0].trim()), timeToMillis(parts[1].trim())};
+        } catch (Exception e) {
+            return new long[]{0, 0};
         }
+    }
 
-        return uniqueSlots;
+
+    private static String getDayName(int dayOfWeek) {
+        switch (dayOfWeek) {
+            case Calendar.SUNDAY: return "Sun";
+            case Calendar.MONDAY: return "Mon";
+            case Calendar.TUESDAY: return "Tue";
+            case Calendar.WEDNESDAY: return "Wed";
+            case Calendar.THURSDAY: return "Thu";
+            case Calendar.FRIDAY: return "Fri";
+            case Calendar.SATURDAY: return "Sat";
+            default: return "";
+        }
     }
 
     private static long timeToMillis(String time) {
         try {
-            if (time == null || time.trim().isEmpty()) {
-                return 0;
+            // Try parsing with AM/PM first
+            if (time.toLowerCase().contains("am") || time.toLowerCase().contains("pm")) {
+                return timeToMillisWithAmPm(time);
             }
-
-            time = time.trim();
-            boolean isPM = time.toUpperCase().contains("PM");
-            boolean isAM = time.toUpperCase().contains("AM");
-
-            // Remove AM/PM from time string
-            time = time.replaceAll("(?i)\\s*(AM|PM)\\s*", "");
 
             String[] parts = time.split(":");
-            if (parts.length != 2) {
-                Log.w(TAG, "Invalid time format: " + time);
-                return 0;
-            }
+            int hour = Integer.parseInt(parts[0]);
+            int minute = Integer.parseInt(parts[1]);
 
-            int hour = Integer.parseInt(parts[0].trim());
-            int minute = Integer.parseInt(parts[1].trim());
-
-            // Convert 12-hour to 24-hour format
-            if (isPM && hour != 12) {
-                hour += 12;
-            } else if (isAM && hour == 12) {
-                hour = 0;
-            }
-
-            // Validate hour and minute
-            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-                Log.w(TAG, "Invalid time values: " + hour + ":" + minute);
-                return 0;
+            // Infer PM for hours like 01:00 to 07:00 if they follow a morning slot (rough logic)
+            if (hour >= 1 && hour <= 7) {
+                hour += 12; // Convert to PM
             }
 
             Calendar calendar = Calendar.getInstance();
@@ -167,59 +183,40 @@ public class TimetableStore {
             calendar.set(Calendar.MILLISECOND, 0);
 
             return calendar.getTimeInMillis();
-
-        } catch (NumberFormatException e) {
-            Log.e(TAG, "Error parsing time numbers: " + time, e);
-            return 0;
         } catch (Exception e) {
-            Log.e(TAG, "Error converting time to millis: " + time, e);
+            Log.e("TimetableStore", "Error converting time to millis: " + time, e);
             return 0;
         }
     }
 
-    /**
-     * Debug method to help troubleshoot timetable parsing
-     */
-    public static void debugTimetableHtml(Context context) {
+    private static long timeToMillisWithAmPm(String time) {
         try {
-            SharedPreferences prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
-            String timetableHtml = prefs.getString("timetable_html", "");
+            time = time.trim().toUpperCase(); // Example: "01:00 PM"
+            String[] parts = time.split("\\s+"); // Split by space between time and AM/PM
 
-            Log.d(TAG, "=== TIMETABLE DEBUG ===");
-            Log.d(TAG, "HTML length: " + timetableHtml.length());
-            Log.d(TAG, "HTML empty: " + timetableHtml.isEmpty());
+            if (parts.length != 2) return 0;
 
-            if (!timetableHtml.isEmpty()) {
-                // Show first 500 characters
-                String preview = timetableHtml.length() > 500 ?
-                        timetableHtml.substring(0, 500) + "..." : timetableHtml;
-                Log.d(TAG, "HTML preview: " + preview);
+            String[] hourMin = parts[0].split(":");
+            int hour = Integer.parseInt(hourMin[0]);
+            int minute = hourMin.length > 1 ? Integer.parseInt(hourMin[1]) : 0;
+            String amPm = parts[1];
 
-                // Check for common patterns
-                Log.d(TAG, "Contains 'table': " + timetableHtml.toLowerCase().contains("table"));
-                Log.d(TAG, "Contains time pattern: " + timetableHtml.matches(".*\\d{1,2}:\\d{2}.*"));
-                Log.d(TAG, "Contains 'AM' or 'PM': " +
-                        (timetableHtml.toUpperCase().contains("AM") || timetableHtml.toUpperCase().contains("PM")));
-            }
+            if (amPm.equals("PM") && hour != 12) hour += 12;
+            if (amPm.equals("AM") && hour == 12) hour = 0;
 
-            List<ClassTimeSlot> slots = getClassTimeSlots(context);
-            Log.d(TAG, "Parsed slots count: " + slots.size());
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minute);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
 
-            for (int i = 0; i < slots.size(); i++) {
-                ClassTimeSlot slot = slots.get(i);
-                Calendar startCal = Calendar.getInstance();
-                startCal.setTimeInMillis(slot.getStartMillis());
-                Calendar endCal = Calendar.getInstance();
-                endCal.setTimeInMillis(slot.getEndMillis());
-
-                Log.d(TAG, "Slot " + i + ": " +
-                        String.format("%02d:%02d - %02d:%02d",
-                                startCal.get(Calendar.HOUR_OF_DAY), startCal.get(Calendar.MINUTE),
-                                endCal.get(Calendar.HOUR_OF_DAY), endCal.get(Calendar.MINUTE)));
-            }
-
+            return calendar.getTimeInMillis();
         } catch (Exception e) {
-            Log.e(TAG, "Error in debug method", e);
+            Log.e("TimetableStore", "Error in timeToMillisWithAmPm: " + time, e);
+            return 0;
         }
     }
+
+
+
 }

@@ -314,94 +314,43 @@ public class LoginActivity extends AppCompatActivity {
                     Log.d("LoginFlow", "Timetable response: " + response.code());
 
                     if (response.isSuccessful()) {
-                        String timetableData = response.body() != null ? response.body().string() : "";
-                        Log.d("TimetableDebug", "Timetable HTML length: " + timetableData.length());
+                        String fullHtml = response.body() != null ? response.body().string() : "";
 
-                        // Debug: Log first 1000 characters of HTML for inspection
-                        if (timetableData.length() > 0) {
-                            int previewLength = Math.min(1000, timetableData.length());
-                            Log.d("TimetableDebug", "Timetable HTML preview: " + timetableData.substring(0, previewLength));
+                        // ✅ Extract only the inner <table cellspacing="1" ...> ... </table>
+                        String timetableData = "";
+                        int startIndex = fullHtml.indexOf("<table cellspacing=\"1\"");
+                        int endIndex = fullHtml.indexOf("</table>", startIndex);
+                        if (startIndex != -1 && endIndex != -1) {
+                            timetableData = fullHtml.substring(startIndex, endIndex + "</table>".length());
+                            Log.d("TimetableFix", "Timetable table extracted, length: " + timetableData.length());
+                        } else {
+                            Log.w("TimetableFix", "Timetable <table> not found");
+                            timetableData = fullHtml;  // fallback to full HTML
                         }
 
-                        // ✅ Store the timetable data in SharedPreferences
+                        // ✅ Save extracted HTML
                         SharedPreferences prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
-                        boolean saved = prefs.edit()
+                        prefs.edit()
                                 .putString("timetable_html", timetableData)
                                 .putLong("timetable_fetch_time", System.currentTimeMillis())
-                                .commit();
+                                .apply();
 
-                        Log.d("TimetableDebug", "Timetable data saved to SharedPreferences: " + saved);
-
-                        // ✅ Validate that we actually have timetable content
-                        boolean hasValidTimetable = validateTimetableData(timetableData);
-                        Log.d("TimetableDebug", "Has valid timetable: " + hasValidTimetable);
-
-                        // ✅ Try to parse and count time slots immediately
-                        List<ClassTimeSlot> parsedSlots = TimetableStore.getClassTimeSlots(this);
-                        Log.d("TimetableDebug", "Parsed " + parsedSlots.size() + " time slots");
-
-                        // ✅ Update UI on main thread
                         mainHandler.post(() -> {
                             showLoading(false);
-
-                            if (hasValidTimetable) {
-                                String successMessage = "Timetable fetched successfully!";
-                                if (parsedSlots.size() > 0) {
-                                    successMessage += " (" + parsedSlots.size() + " classes found)";
-                                }
-                                Toast.makeText(this, successMessage, Toast.LENGTH_SHORT).show();
-                            } else {
-                                Toast.makeText(this, "Timetable fetched but may be empty", Toast.LENGTH_SHORT).show();
-                            }
-
-                            // ✅ Proceed to MainActivity
+                            Toast.makeText(this, "Timetable saved!", Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                            intent.putExtra("timetable_data", timetableData);
-                            intent.putExtra("has_valid_timetable", hasValidTimetable);
-                            intent.putExtra("parsed_slots_count", parsedSlots.size());
                             startActivity(intent);
                             finish();
                         });
-
                     } else {
-                        // ✅ Handle unsuccessful response
-                        String errorBody = "";
-                        if (response.body() != null) {
-                            errorBody = response.body().string();
-                        }
-
-                        Log.e("TimetableError", "Timetable fetch failed: " + response.code() + " - " + response.message());
-                        Log.e("TimetableError", "Error body: " + errorBody.substring(0, Math.min(500, errorBody.length())));
-
-                        throw new Exception("Timetable fetch failed: " + response.code() + " - " + response.message());
+                        throw new Exception("Timetable fetch failed: " + response.code());
                     }
                 }
             } catch (Exception e) {
                 Log.e("TimetableError", "Timetable fetch error", e);
                 mainHandler.post(() -> {
                     showLoading(false);
-
-                    String errorMessage = "Error fetching timetable: " + e.getMessage();
-
-                    // ✅ Provide more specific error messages
-                    if (e.getMessage().contains("timeout")) {
-                        errorMessage = "Timetable fetch timed out. Please try again.";
-                    } else if (e.getMessage().contains("404")) {
-                        errorMessage = "Timetable page not found. Please contact support.";
-                    } else if (e.getMessage().contains("403")) {
-                        errorMessage = "Access denied to timetable. Please login again.";
-                    }
-
-                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
-
-                    // ✅ Option to continue to MainActivity even if timetable fetch fails
-                    // This allows user to potentially re-login or try again
-                    Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                    intent.putExtra("timetable_data", "");
-                    intent.putExtra("has_valid_timetable", false);
-                    intent.putExtra("timetable_error", errorMessage);
-                    startActivity(intent);
-                    finish();
+                    Toast.makeText(this, "Error fetching timetable: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         });

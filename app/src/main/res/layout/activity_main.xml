@@ -5,7 +5,6 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Original DND Status TextView with enhanced styling -->
     <TextView
         android:id="@+id/tv_dnd_status"
         android:layout_width="match_parent"
@@ -14,11 +13,10 @@
         android:textSize="18sp"
         android:textStyle="bold"
         android:gravity="center"
-        android:padding="16dp"
+        android:padding="12dp"
         android:background="@drawable/rounded_background"
         android:layout_marginBottom="16dp" />
 
-    <!-- Original Toggle Button with full width -->
     <Button
         android:id="@+id/btn_toggle_dnd"
         android:layout_width="match_parent"
@@ -27,38 +25,58 @@
         android:textSize="16sp"
         android:layout_marginBottom="16dp" />
 
-    <!-- New Timetable Info TextView -->
     <TextView
-        android:id="@+id/tv_timetable_info"
+        android:id="@+id/tv_today_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Loading timetable info..."
-        android:textSize="14sp"
-        android:padding="12dp"
-        android:background="#f0f0f0"
-        android:layout_marginBottom="16dp"
-        android:visibility="gone" />  <!-- Initially hidden -->
+        android:text="Today's Classes"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:layout_marginBottom="8dp" />
 
-    <!-- New Debug Button -->
+    <TextView
+        android:id="@+id/tv_current_time"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Current Time: --:--"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tv_next_class"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Next Class: --"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tv_timetable_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Timetable Loaded"
+        android:textSize="14sp"
+        android:textColor="#4CAF50"
+        android:layout_marginBottom="16dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_today_classes"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
     <Button
-        android:id="@+id/btn_debug_timetable"
+        android:id="@+id/btn_refresh_timetable"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Debug Timetable"
-        android:textSize="14sp"
-        android:layout_marginBottom="16dp"
-        android:backgroundTint="@color/colorAccent"
-        android:textColor="@android:color/white"
-        android:visibility="gone" />  <!-- Initially hidden -->
+        android:text="Refresh Timetable"
+        android:layout_marginBottom="12dp" />
 
-    <!-- New Instructions TextView -->
-    <TextView
+    <Button
+        android:id="@+id/btn_check_now"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Instructions:\n1. Grant DND access when prompted\n2. Enable auto-scheduling to automatically turn DND on/off during classes\n3. Check logs if timetable parsing fails"
-        android:textSize="12sp"
-        android:padding="12dp"
-        android:background="#e8f5e8"
-        android:layout_marginTop="16dp" />
+        android:text="Check Now"
+        android:layout_marginBottom="12dp" />
 
 </LinearLayout>

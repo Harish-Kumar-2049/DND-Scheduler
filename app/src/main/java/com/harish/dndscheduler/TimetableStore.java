@@ -13,6 +13,10 @@ import java.util.regex.Pattern;
 public class TimetableStore {
 
     public static List<ClassTimeSlot> getClassTimeSlots(Context context) {
+        return getClassTimeSlotsForDay(context, -1); // -1 means ALL DAYS
+    }
+
+    public static List<ClassTimeSlot> getClassTimeSlotsForDay(Context context, int targetDay) {
         SharedPreferences prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
         String html = prefs.getString("timetable_html", "");
 
@@ -31,14 +35,37 @@ public class TimetableStore {
             }
             Log.d("TimetableStore", "Found " + timeRanges.size() + " time slots");
 
-            // Step 2: Extract current day's name
+            // Step 2: Parse ALL DAYS or specific day
             String[] daysShort = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-            Calendar cal = Calendar.getInstance();
-            String today = daysShort[cal.get(Calendar.DAY_OF_WEEK) - 1];
+            
+            if (targetDay == -1) {
+                // Parse all days of the week
+                for (int dayIndex = 1; dayIndex <= 6; dayIndex++) { // Mon-Sat
+                    String dayName = daysShort[dayIndex];
+                    slots.addAll(parseDayClasses(html, dayName, timeRanges, dayIndex));
+                }
+            } else {
+                // Parse only specific day
+                Calendar cal = Calendar.getInstance();
+                String today = daysShort[cal.get(Calendar.DAY_OF_WEEK) - 1];
+                slots.addAll(parseDayClasses(html, today, timeRanges, cal.get(Calendar.DAY_OF_WEEK) - 1));
+            }
 
-            // Step 3: Match today's row
+            Log.d("TimetableStore", "Parsed total " + slots.size() + " valid slots");
+        } catch (Exception e) {
+            Log.e("TimetableStore", "Error parsing timetable", e);
+        }
+
+        return slots;
+    }
+
+    private static List<ClassTimeSlot> parseDayClasses(String html, String dayName, List<String> timeRanges, int dayOfWeek) {
+        List<ClassTimeSlot> daySlots = new ArrayList<>();
+        
+        try {
+            // Step 3: Match specific day's row
             Pattern rowPattern = Pattern.compile(
-                    "<tr>\\s*<td[^>]*><font[^>]*><b>" + today + "</b></font></td>(.*?)</tr>",
+                    "<tr>\\s*<td[^>]*><font[^>]*><b>" + dayName + "</b></font></td>(.*?)</tr>",
                     Pattern.CASE_INSENSITIVE | Pattern.DOTALL
             );
             Matcher rowMatcher = rowPattern.matcher(html);
@@ -50,22 +77,57 @@ public class TimetableStore {
                     String code = classMatcher.group(1).trim();
                     if (!code.isEmpty() && index < timeRanges.size()) {
                         String[] parts = timeRanges.get(index).split("-");
-                        long start = timeToMillis(parts[0]);
-                        long end = timeToMillis(parts[1]);
-                        slots.add(new ClassTimeSlot(start, end, code));
-                        Log.d("TimetableStore", "Added " + code + " at " + timeRanges.get(index));
+                        
+                        // Create time for the specific day of week
+                        long start = timeToMillisForDay(parts[0], dayOfWeek);
+                        long end = timeToMillisForDay(parts[1], dayOfWeek);
+                        
+                        daySlots.add(new ClassTimeSlot(start, end, code));
+                        Log.d("TimetableStore", "Added " + dayName + ": " + code + " at " + timeRanges.get(index));
                     }
                     index++;
                 }
             }
-
-            Log.d("TimetableStore", "Parsed total " + slots.size() + " valid slots for today");
+            
+            Log.d("TimetableStore", "Parsed " + daySlots.size() + " slots for " + dayName);
         } catch (Exception e) {
-            Log.e("TimetableStore", "Error parsing timetable", e);
+            Log.e("TimetableStore", "Error parsing " + dayName + " classes", e);
         }
-
-        return slots;
+        
+        return daySlots;
     }
+
+    private static long timeToMillisForDay(String time, int dayOfWeek) {
+        try {
+            // Parse time same as before
+            String[] parts = time.split(":");
+            int hour = Integer.parseInt(parts[0]);
+            int minute = Integer.parseInt(parts[1]);
+
+            // Infer PM for hours like 01:00 to 07:00
+            if (hour >= 1 && hour <= 7) {
+                hour += 12; // Convert to PM
+            }
+
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.DAY_OF_WEEK, dayOfWeek + 1); // Calendar uses 1-7
+            calendar.set(Calendar.HOUR_OF_DAY, hour);
+            calendar.set(Calendar.MINUTE, minute);
+            calendar.set(Calendar.SECOND, 0);
+            calendar.set(Calendar.MILLISECOND, 0);
+
+            // If the day has passed this week, schedule for next week
+            if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
+                calendar.add(Calendar.WEEK_OF_YEAR, 1);
+            }
+
+            return calendar.getTimeInMillis();
+        } catch (Exception e) {
+            Log.e("TimetableStore", "Error converting time to millis for day: " + time, e);
+            return 0;
+        }
+    }
+    
     private static List<ClassTimeSlot> parseTableWithSubjects(String html) {
         List<ClassTimeSlot> slots = new ArrayList<>();
 

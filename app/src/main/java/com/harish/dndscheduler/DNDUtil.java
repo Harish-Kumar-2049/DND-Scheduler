@@ -1,5 +1,5 @@
 package com.harish.dndscheduler;
-
+ 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -43,23 +43,82 @@ public class DNDUtil {
 
     private static void scheduleDailyAlarm(Context context, AlarmManager alarmManager, int hour, int minute, String action, int requestCode) {
         Intent intent = new Intent(context, DNDReceiver.class).setAction(action);
+        
+        // Add time information to the intent for better rescheduling
+        intent.putExtra("hour", hour);
+        intent.putExtra("minute", minute);
+        intent.putExtra("requestCode", requestCode);
+        
         PendingIntent pendingIntent = PendingIntent.getBroadcast(
                 context,
                 requestCode,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
+        
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.HOUR_OF_DAY, hour);
         calendar.set(Calendar.MINUTE, minute);
         calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MILLISECOND, 0);
+        
+        // If time has passed today, schedule for tomorrow
         if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
             calendar.add(Calendar.DAY_OF_YEAR, 1);
         }
+        
+        // Primary alarm - exact timing
         alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 calendar.getTimeInMillis(),
                 pendingIntent
         );
+        
+        // Schedule backup alarm 1 minute later (for redundancy)
+        scheduleBackupAlarm(context, alarmManager, calendar, action, requestCode + 10000);
+        
+        android.util.Log.d("DNDUtil", "Scheduled " + action + " at " + 
+                          hour + ":" + String.format("%02d", minute) + 
+                          " for " + calendar.getTime() + " with backup");
+    }
+
+    /**
+     * Schedule a backup alarm 1 minute after the primary alarm
+     * This provides redundancy without requiring battery exemption
+     */
+    private static void scheduleBackupAlarm(Context context, AlarmManager alarmManager, 
+                                          Calendar primaryTime, String action, int backupRequestCode) {
+        try {
+            Intent backupIntent = new Intent(context, DNDReceiver.class);
+            backupIntent.setAction(action + "_BACKUP");
+            
+            // Copy time info for backup alarm
+            backupIntent.putExtra("hour", primaryTime.get(Calendar.HOUR_OF_DAY));
+            backupIntent.putExtra("minute", primaryTime.get(Calendar.MINUTE));
+            backupIntent.putExtra("requestCode", backupRequestCode);
+            backupIntent.putExtra("isBackup", true);
+            
+            PendingIntent backupPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    backupRequestCode,
+                    backupIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            
+            // Schedule backup 1 minute after primary
+            Calendar backupTime = (Calendar) primaryTime.clone();
+            backupTime.add(Calendar.MINUTE, 1);
+            
+            alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    backupTime.getTimeInMillis(),
+                    backupPendingIntent
+            );
+            
+            android.util.Log.d("DNDUtil", "Scheduled backup " + action + " at " + backupTime.getTime());
+            
+        } catch (Exception e) {
+            android.util.Log.e("DNDUtil", "Failed to schedule backup alarm", e);
+        }
     }
 }

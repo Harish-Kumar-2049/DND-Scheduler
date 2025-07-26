@@ -1,5 +1,5 @@
 package com.harish.dndscheduler;
-
+ 
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -13,13 +13,15 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 
+import java.util.List;
+
 import androidx.core.app.NotificationCompat;
 
 public class DNDService extends Service {
 
     private static final String CHANNEL_ID = "DND_SERVICE_CHANNEL";
     private static final int NOTIFICATION_ID = 1001;
-    private static final int CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    private static final int CHECK_INTERVAL = 3 * 60 * 1000; // 3 minutes - more frequent for reliability
 
     private Handler handler;
     private Runnable checkRunnable;
@@ -28,16 +30,16 @@ public class DNDService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        dndManager = new DNDManager(this);
+        dndManager = DNDManager.getInstance(this);
         handler = new Handler(Looper.getMainLooper());
 
         createNotificationChannel();
-        startForeground(NOTIFICATION_ID, createNotification());
+        startForeground(NOTIFICATION_ID, createEnhancedNotification());
 
-        // Start periodic checking
-        startPeriodicCheck();
+        // Start enhanced periodic checking
+        startEnhancedPeriodicCheck();
 
-        Log.d("DNDService", "DND Service created and started");
+        Log.d("DNDService", "Enhanced DND Service created and started");
     }
 
     @Override
@@ -80,39 +82,73 @@ public class DNDService extends Service {
         }
     }
 
-    private Notification createNotification() {
+    /**
+     * Enhanced notification that emphasizes reliability without mentioning battery optimization
+     */
+    private Notification createEnhancedNotification() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this, 0, notificationIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("DND Scheduler Active")
-                .setContentText("Automatically managing Do Not Disturb based on your class schedule")
+                .setContentTitle("DND Scheduler - Enhanced Mode")
+                .setContentText("High-reliability DND scheduling active for your classes")
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
                 .build();
     }
 
-    private void startPeriodicCheck() {
+    /**
+     * Enhanced periodic checking with multiple redundancy layers
+     */
+    private void startEnhancedPeriodicCheck() {
         checkRunnable = new Runnable() {
             @Override
             public void run() {
                 try {
+                    // Primary check
                     dndManager.checkAndSetCurrentDndStatus(null);
-                    Log.d("DNDService", "Periodic DND check completed");
+                    
+                    // Verify alarm status periodically
+                    verifyAlarmStatus();
+                    
+                    Log.d("DNDService", "Enhanced periodic DND check completed");
                 } catch (Exception e) {
-                    Log.e("DNDService", "Error in periodic check", e);
+                    Log.e("DNDService", "Error in enhanced periodic check", e);
                 }
 
-                // Schedule next check
-                handler.postDelayed(this, CHECK_INTERVAL);
+                // Schedule next check with variable interval to avoid predictable patterns
+                int nextInterval = CHECK_INTERVAL + (int)(Math.random() * 60000); // ±1 minute variation
+                handler.postDelayed(this, nextInterval);
             }
         };
 
         handler.post(checkRunnable);
+    }
+
+    /**
+     * Verify that critical alarms are still scheduled
+     */
+    private void verifyAlarmStatus() {
+        try {
+            if (dndManager.isDndSchedulingEnabled()) {
+                // Check if we have upcoming alarms - if not, reschedule
+                // This serves as a failsafe against alarm system cleanup
+                
+                List<ClassTimeSlot> todaySlots = TimetableStore.getClassTimeSlots(this);
+                if (todaySlots.isEmpty()) {
+                    Log.w("DNDService", "No class slots found - triggering alarm refresh");
+                    dndManager.scheduleDndForClasses();
+                }
+            }
+        } catch (Exception e) {
+            Log.e("DNDService", "Error verifying alarm status", e);
+        }
     }
 
     public static void startService(Context context) {

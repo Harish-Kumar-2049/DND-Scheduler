@@ -1,5 +1,5 @@
 package com.harish.dndscheduler;
-
+ 
 import android.app.AlarmManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -16,17 +16,26 @@ import java.util.List;
 
 public class DNDManager {
 
+    private static DNDManager instance;
     private final Context context;
     private final AlarmManager alarmManager;
     private final NotificationManager notificationManager;
     private final SharedPreferences prefs;
     private static final String TAG = "DNDManager";
+    private boolean isRequestingDndAccess = false; // Flag to prevent multiple permission requests
 
-    public DNDManager(Context context) {
-        this.context = context;
+    private DNDManager(Context context) {
+        this.context = context.getApplicationContext(); // Use app context to prevent leaks
         this.alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         this.notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         this.prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
+    }
+
+    public static synchronized DNDManager getInstance(Context context) {
+        if (instance == null) {
+            instance = new DNDManager(context);
+        }
+        return instance;
     }
 
     public void scheduleDndForClasses() {
@@ -132,7 +141,7 @@ public class DNDManager {
         return cal;
     }
 
-    private void schedulePeriodicCheck() {
+    public void schedulePeriodicCheck() {
         Intent intent = new Intent(context, DNDReceiver.class);
         intent.setAction("PERIODIC_CHECK");
 
@@ -273,25 +282,29 @@ public class DNDManager {
         Log.d(TAG, "Cancelled alarm with request code: " + requestCode);
     }
 
-    public void setDndOn() {
+    public boolean setDndOn() {
         if (hasDndAccess()) {
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
             prefs.edit().putBoolean("dnd_currently_on", true).apply();
             prefs.edit().putBoolean("dnd_set_by_app", true).apply();
             Log.d(TAG, "DND turned ON");
+            return true;
         } else {
-            requestDndAccess();
+            requestDndAccessSafely();
+            return false;
         }
     }
 
-    public void setDndOff() {
+    public boolean setDndOff() {
         if (hasDndAccess()) {
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL);
             prefs.edit().putBoolean("dnd_currently_on", false).apply();
             prefs.edit().putBoolean("dnd_set_by_app", false).apply();
             Log.d(TAG, "DND turned OFF");
+            return true;
         } else {
-            requestDndAccess();
+            requestDndAccessSafely();
+            return false;
         }
     }
 
@@ -307,7 +320,7 @@ public class DNDManager {
         return prefs.getBoolean("dnd_scheduling_enabled", false);
     }
 
-    private boolean hasDndAccess() {
+    public boolean hasDndAccess() {
         boolean hasAccess = notificationManager.isNotificationPolicyAccessGranted();
         if (!hasAccess) {
             Log.w(TAG, "DND access not granted");
@@ -315,10 +328,31 @@ public class DNDManager {
         return hasAccess;
     }
 
+    // New method to safely request DND access without duplicates
+    private synchronized void requestDndAccessSafely() {
+        // Check if we're already showing the permission screen
+        if (!isRequestingDndAccess) {
+            isRequestingDndAccess = true;
+            Log.d(TAG, "Requesting DND access - first request");
+            
+            // Show toast and settings screen
+            Toast.makeText(context, "Please grant Do Not Disturb access in settings", Toast.LENGTH_LONG).show();
+            Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            
+            // Reset flag after delay to allow future requests if needed
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                isRequestingDndAccess = false;
+                Log.d(TAG, "DND permission request flag reset");
+            }, 10000); // 10 second cooldown
+        } else {
+            Log.d(TAG, "Skipping duplicate DND permission request");
+        }
+    }
+    
+    // Keep the old method for backward compatibility but make it call the safe version
     private void requestDndAccess() {
-        Toast.makeText(context, "Please grant Do Not Disturb access in settings", Toast.LENGTH_LONG).show();
-        Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        context.startActivity(intent);
+        requestDndAccessSafely();
     }
 }

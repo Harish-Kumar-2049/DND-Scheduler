@@ -27,7 +27,8 @@ public class LoginActivity extends AppCompatActivity {
 
     private EditText etRegister, etPassword, etCaptcha;
     private ImageView imgCaptcha;
-    private Button btnRefreshCaptcha, btnLogin;
+    private ImageButton btnRefreshCaptcha;
+    private Button btnLogin;
     private ProgressBar progressBar;
 
     private OkHttpClient client;
@@ -141,7 +142,7 @@ public class LoginActivity extends AppCompatActivity {
                 Log.e("CaptchaError", "Captcha loading error", e);
                 mainHandler.post(() -> {
                     showLoading(false);
-                    Toast.makeText(this, "Error loading captcha.", Toast.LENGTH_SHORT).show();
+                    // Error loading captcha - removed toast
                 });
             }
         });
@@ -214,7 +215,7 @@ public class LoginActivity extends AppCompatActivity {
                 Log.e("LoginError", "Login error", e);
                 mainHandler.post(() -> {
                     showLoading(false);
-                    Toast.makeText(this, "Login error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    // Login error - removed toast
                     fetchLoginPageAndCaptcha();
                 });
             }
@@ -254,7 +255,7 @@ public class LoginActivity extends AppCompatActivity {
             Log.e("LoginError", "Redirect handling error", e);
             mainHandler.post(() -> {
                 showLoading(false);
-                Toast.makeText(this, "Error following redirect: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                // Error following redirect - removed toast
             });
         }
     }
@@ -288,7 +289,7 @@ public class LoginActivity extends AppCompatActivity {
                 errorMessage = "Invalid credentials. Please check your registration number and password.";
             }
 
-            Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
+            // Error message - removed toast
             fetchLoginPageAndCaptcha(); // Refresh captcha
         });
     }
@@ -337,7 +338,7 @@ public class LoginActivity extends AppCompatActivity {
 
                         mainHandler.post(() -> {
                             showLoading(false);
-                            Toast.makeText(this, "Timetable saved!", Toast.LENGTH_SHORT).show();
+                            // Timetable saved - removed toast
                             Intent intent = new Intent(LoginActivity.this, MainActivity.class);
                             startActivity(intent);
                             finish();
@@ -350,7 +351,7 @@ public class LoginActivity extends AppCompatActivity {
                 Log.e("TimetableError", "Timetable fetch error", e);
                 mainHandler.post(() -> {
                     showLoading(false);
-                    Toast.makeText(this, "Error fetching timetable: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    // Error fetching timetable - removed toast
                 });
             }
         });

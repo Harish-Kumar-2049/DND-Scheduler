@@ -5,4 +5,18 @@
     <color name="purple_500">#6200EE</color>
     <color name="gray_500">#9E9E9E</color>
     <color name="colorAccent">#03DAC5</color>
+    <color name="primary">#5E35B1</color>
+    <color name="light_gray">#F0F0F0</color>
+    <color name="login_background">#F5F5F5</color>
+    <color name="login_card_background">#FFFFFF</color>
+    <color name="button_color">#5E35B1</color>
+    <color name="text_color">#212121</color>
+    <color name="hint_color">#757575</color>
+    <color name="success_color">#4CAF50</color>
+    <color name="warning_color">#FF9800</color>
+    <color name="error_color">#F44336</color>
+    <color name="main_background">#F8F9FA</color>
+    <color name="card_background">#FFFFFF</color>
+    <color name="class_item_background">#E3F2FD</color>
+    <color name="class_item_border">#BBDEFB</color>
 </resources>

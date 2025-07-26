@@ -1,66 +1,142 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/login_background"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp"
-        android:gravity="center_horizontal">
+        android:gravity="center">
 
-        <EditText
-            android:id="@+id/et_register_number"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Register Number"
-            android:inputType="text"
-            android:layout_marginBottom="16dp"/>
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:layout_margin="24dp"
+            android:background="@drawable/login_background"
+            android:elevation="6dp"
+            android:gravity="center_horizontal"
+            android:maxWidth="400dp">
 
-        <EditText
-            android:id="@+id/et_password"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Password"
-            android:inputType="textPassword"
-            android:layout_marginBottom="16dp"/>
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:hint="Register Number"
+                    app:hintTextColor="@color/hint_color"
+                    app:boxStrokeColor="@color/primary"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_register_number"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textColor="@color/text_color"/>
+                </com.google.android.material.textfield.TextInputLayout>
 
-        <ImageView
-            android:id="@+id/img_captcha"
-            android:layout_width="200dp"
-            android:layout_height="80dp"
-            android:contentDescription="Captcha"
-            android:layout_marginBottom="16dp"
-            android:scaleType="fitCenter"/>
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:hint="Password"
+                    app:passwordToggleEnabled="true"
+                    app:hintTextColor="@color/hint_color"
+                    app:boxStrokeColor="@color/primary"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_password"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:textColor="@color/text_color"/>
+                </com.google.android.material.textfield.TextInputLayout>
 
-        <Button
-            android:id="@+id/btn_refresh_captcha"
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:hint="Enter Captcha"
+                    app:hintTextColor="@color/hint_color"
+                    app:boxStrokeColor="@color/primary"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_captcha"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textColor="@color/text_color"/>
+                </com.google.android.material.textfield.TextInputLayout>
+            
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Refresh Captcha"
-            android:layout_marginBottom="16dp"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="24dp">
+            
+            <FrameLayout
+                android:layout_width="220dp"
+                android:layout_height="80dp"
+                android:background="@drawable/captcha_background"
+                android:padding="0dp"
+                android:elevation="2dp"
+                android:layout_marginEnd="12dp">
+                
+                <ImageView
+                    android:id="@+id/img_captcha"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="Captcha"
+                    android:scaleType="fitXY"
+                    android:adjustViewBounds="true"/>
+            </FrameLayout>
 
-        <EditText
-            android:id="@+id/et_captcha"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Enter Captcha"
-            android:inputType="text"
-            android:layout_marginBottom="24dp"/>
+            <ImageButton
+                android:id="@+id/btn_refresh_captcha"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/refresh_button_ripple"
+                android:src="@drawable/ic_refresh"
+                android:contentDescription="Refresh Captcha"
+                android:elevation="2dp"/>
+                
+        </LinearLayout>
 
         <Button
             android:id="@+id/btn_login"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Login"/>
+            android:layout_height="56dp"
+            android:text="Login"
+            android:textSize="16sp"
+            android:textColor="@color/white"
+            android:background="@drawable/button_ripple"
+            android:elevation="2dp"/>
 
         <ProgressBar
             android:id="@+id/progress_bar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:visibility="gone"
-            android:layout_marginTop="32dp"/>
-
+            android:layout_marginTop="16dp"/>
+        
+        </LinearLayout>
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="© 2025 DND Scheduler"
+            android:textSize="12sp"
+            android:textColor="@color/hint_color"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp"/>
+            
     </LinearLayout>
 </ScrollView>

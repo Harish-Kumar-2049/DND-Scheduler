@@ -2,15 +2,23 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="12dp">
+    android:padding="16dp"
+    android:background="@drawable/rounded_background"
+    android:layout_marginBottom="8dp"
+    android:elevation="2dp">
 
     <TextView
         android:id="@+id/tv_class_time"
-        android:layout_width="90dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="8:45 AM"
+        android:minWidth="140dp"
+        android:text="8:45 AM - 10:30 AM"
         android:textSize="14sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:textColor="@color/primary"
+        android:maxLines="1"
+        android:ellipsize="none"
+        android:singleLine="true" />
 
     <TextView
         android:id="@+id/tv_class_subject"
@@ -19,5 +27,9 @@
         android:layout_weight="1"
         android:text="Subject Name"
         android:textSize="16sp"
-        android:paddingStart="16dp"/>
+        android:textColor="@color/text_color"
+        android:textStyle="bold"
+        android:paddingStart="16dp"
+        android:maxLines="1"
+        android:ellipsize="end"/>
 </LinearLayout>

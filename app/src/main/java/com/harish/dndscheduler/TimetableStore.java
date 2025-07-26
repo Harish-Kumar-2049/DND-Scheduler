@@ -3,17 +3,35 @@ package com.harish.dndscheduler;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class TimetableStore {
 
     public static List<ClassTimeSlot> getClassTimeSlots(Context context) {
-        return getClassTimeSlotsForDay(context, -1); // -1 means ALL DAYS
+        Log.d("TimetableStore", "=== Getting ALL class time slots ===");
+        List<ClassTimeSlot> allSlots = getClassTimeSlotsForDay(context, -1); // -1 means ALL DAYS
+        Log.d("TimetableStore", "Retrieved " + allSlots.size() + " total slots from storage");
+        
+        // Log all slots for verification
+        for (ClassTimeSlot slot : allSlots) {
+            Calendar cal = Calendar.getInstance();
+            cal.setTimeInMillis(slot.getStartMillis());
+            String dayName = getDayName(cal.get(Calendar.DAY_OF_WEEK));
+            String time = new SimpleDateFormat("h:mm a", Locale.getDefault()).format(new Date(slot.getStartMillis())) +
+                    " - " + new SimpleDateFormat("h:mm a", Locale.getDefault()).format(new Date(slot.getEndMillis()));
+            Log.d("TimetableStore", "Stored slot: " + dayName + " " + time + " => " + slot.getSubject());
+        }
+        
+        Log.d("TimetableStore", "=== End getting ALL class time slots ===");
+        return allSlots;
     }
 
     public static List<ClassTimeSlot> getClassTimeSlotsForDay(Context context, int targetDay) {
@@ -27,13 +45,52 @@ public class TimetableStore {
         if (html.isEmpty()) return slots;
 
         try {
-            // Step 1: Extract all time ranges (08:45-09:45, etc.)
+            // Step 1: Extract all time ranges (08:45-09:45, 4:15-5:15, etc.)
             List<String> timeRanges = new ArrayList<>();
-            Matcher timeMatcher = Pattern.compile("class=['\"]TDtimetableHour['\"]>(\\d{2}:\\d{2}-\\d{2}:\\d{2})", Pattern.CASE_INSENSITIVE).matcher(html);
-            while (timeMatcher.find()) {
-                timeRanges.add(timeMatcher.group(1));
+            
+            // Try multiple patterns to ensure we catch all time formats
+            String[] timePatterns = {
+                "class=['\"]TDtimetableHour['\"]>(\\d{1,2}:\\d{2}-\\d{1,2}:\\d{2})",  // Primary pattern
+                "class=['\"]TDtimetableHour['\"][^>]*>(\\d{1,2}:\\d{2}-\\d{1,2}:\\d{2})",  // With additional attributes
+                ">\\s*(\\d{1,2}:\\d{2}-\\d{1,2}:\\d{2})\\s*</td>",  // Alternative cell format
+                ">(\\d{1,2}:\\d{2}\\s*-\\s*\\d{1,2}:\\d{2})<"  // With spaces around dash
+            };
+            
+            for (String pattern : timePatterns) {
+                Matcher timeMatcher = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE).matcher(html);
+                while (timeMatcher.find()) {
+                    String timeRange = timeMatcher.group(1).replaceAll("\\s+", ""); // Remove any spaces
+                    if (!timeRanges.contains(timeRange)) {
+                        timeRanges.add(timeRange);
+                    }
+                }
             }
-            Log.d("TimetableStore", "Found " + timeRanges.size() + " time slots");
+            
+            // Sort time ranges to ensure proper order
+            timeRanges.sort((a, b) -> {
+                try {
+                    String[] aParts = a.split("-");
+                    String[] bParts = b.split("-");
+                    String[] aTime = aParts[0].split(":");
+                    String[] bTime = bParts[0].split(":");
+                    int aHour = Integer.parseInt(aTime[0]);
+                    int bHour = Integer.parseInt(bTime[0]);
+                    
+                    // Handle PM conversion for comparison
+                    if (aHour >= 1 && aHour <= 7) aHour += 12;
+                    if (bHour >= 1 && bHour <= 7) bHour += 12;
+                    
+                    if (aHour != bHour) return Integer.compare(aHour, bHour);
+                    return Integer.compare(Integer.parseInt(aTime[1]), Integer.parseInt(bTime[1]));
+                } catch (Exception e) {
+                    return a.compareTo(b);
+                }
+            });
+            
+            Log.d("TimetableStore", "Found " + timeRanges.size() + " time slots:");
+            for (int i = 0; i < timeRanges.size(); i++) {
+                Log.d("TimetableStore", "  " + i + ": " + timeRanges.get(i));
+            }
 
             // Step 2: Parse ALL DAYS or specific day
             String[] daysShort = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
@@ -63,6 +120,11 @@ public class TimetableStore {
         List<ClassTimeSlot> daySlots = new ArrayList<>();
         
         try {
+            Log.d("TimetableStore", "Parsing " + dayName + " with " + timeRanges.size() + " time ranges");
+            for (int i = 0; i < timeRanges.size(); i++) {
+                Log.d("TimetableStore", "Time slot " + i + ": " + timeRanges.get(i));
+            }
+            
             // Step 3: Match specific day's row
             Pattern rowPattern = Pattern.compile(
                     "<tr>\\s*<td[^>]*><font[^>]*><b>" + dayName + "</b></font></td>(.*?)</tr>",
@@ -71,22 +133,44 @@ public class TimetableStore {
             Matcher rowMatcher = rowPattern.matcher(html);
             if (rowMatcher.find()) {
                 String rowContent = rowMatcher.group(1);
+                Log.d("TimetableStore", "Found row content for " + dayName + ": " + rowContent.substring(0, Math.min(100, rowContent.length())) + "...");
+                
                 Matcher classMatcher = Pattern.compile("<td[^>]*>\\s*<font[^>]*>(.*?)</font>\\s*</td>", Pattern.CASE_INSENSITIVE).matcher(rowContent);
                 int index = 0;
+                List<String> classCodes = new ArrayList<>();
+                
                 while (classMatcher.find()) {
                     String code = classMatcher.group(1).trim();
-                    if (!code.isEmpty() && index < timeRanges.size()) {
-                        String[] parts = timeRanges.get(index).split("-");
+                    classCodes.add(code);
+                    Log.d("TimetableStore", "Class cell " + index + ": '" + code + "'");
+                    index++;
+                }
+                
+                Log.d("TimetableStore", "Found " + classCodes.size() + " class cells for " + dayName);
+                
+                // Process each class code with corresponding time slot
+                for (int i = 0; i < classCodes.size() && i < timeRanges.size(); i++) {
+                    String code = classCodes.get(i);
+                    if (!code.isEmpty()) {
+                        String[] parts = timeRanges.get(i).split("-");
                         
                         // Create time for the specific day of week
                         long start = timeToMillisForDay(parts[0], dayOfWeek);
                         long end = timeToMillisForDay(parts[1], dayOfWeek);
                         
                         daySlots.add(new ClassTimeSlot(start, end, code));
-                        Log.d("TimetableStore", "Added " + dayName + ": " + code + " at " + timeRanges.get(index));
+                        Log.d("TimetableStore", "Added " + dayName + " slot " + i + ": " + code + " at " + timeRanges.get(i));
+                    } else {
+                        Log.d("TimetableStore", "Skipped empty slot " + i + " for " + dayName);
                     }
-                    index++;
                 }
+                
+                // Check if we have more time ranges than class codes
+                if (timeRanges.size() > classCodes.size()) {
+                    Log.w("TimetableStore", "WARNING: " + dayName + " has " + timeRanges.size() + " time slots but only " + classCodes.size() + " class cells!");
+                }
+            } else {
+                Log.w("TimetableStore", "No row found for " + dayName);
             }
             
             Log.d("TimetableStore", "Parsed " + daySlots.size() + " slots for " + dayName);

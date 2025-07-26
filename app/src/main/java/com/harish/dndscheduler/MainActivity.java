@@ -1,5 +1,6 @@
 package com.harish.dndscheduler;
 
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
 import android.app.NotificationManager;
@@ -15,7 +16,12 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
-import android.widget.*;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -30,14 +36,14 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity {
 
     private TextView tvDndStatus;
-    private TextView tvCurrentTime;
-    private TextView tvNextClass;
-    private TextView tvTimetableStatus;
     private TextView tvServiceStatus;
-    private Button btnToggleDnd;
-    private Button btnRefreshTimetable;
-    private Button btnCheckNow;
+    private LinearLayout btnToggleDnd;
+    private TextView tvButtonStatus;
+    private LinearLayout layoutSaturdayDropdown;
+    private TextView tvSaturdaySelection;
     private RecyclerView rvTodayClasses;
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private Spinner spinnerSaturdaySchedule;
 
     private SharedPreferences prefs;
     private DNDManager dndManager;
@@ -47,6 +53,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Check if this is first launch or if timetable data exists
+        if (isFirstLaunchOrNoTimetableData()) {
+            // Redirect to LoginActivity directly
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+        
         setContentView(R.layout.activity_main);
 
         initializeViews();
@@ -56,29 +71,62 @@ public class MainActivity extends AppCompatActivity {
         rvTodayClasses.setLayoutManager(new LinearLayoutManager(this));
         checkCurrentDndStatus();
 
+        // Initialize UI state
+        updateUI();
+
         // Start enhanced reliability features
         initializeReliabilityFeatures();
     }
 
     private void initializeViews() {
         tvDndStatus = findViewById(R.id.tv_dnd_status);
-        tvCurrentTime = findViewById(R.id.tv_current_time);
-        tvNextClass = findViewById(R.id.tv_next_class);
-        tvTimetableStatus = findViewById(R.id.tv_timetable_status);
         tvServiceStatus = findViewById(R.id.tv_service_status);
         btnToggleDnd = findViewById(R.id.btn_toggle_dnd);
-        btnRefreshTimetable = findViewById(R.id.btn_refresh_timetable);
-        btnCheckNow = findViewById(R.id.btn_check_now);
+        tvButtonStatus = findViewById(R.id.tv_button_status);
+        layoutSaturdayDropdown = findViewById(R.id.layout_saturday_dropdown);
+        tvSaturdaySelection = findViewById(R.id.tv_saturday_selection);
         rvTodayClasses = findViewById(R.id.rv_today_classes);
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout);
+        spinnerSaturdaySchedule = findViewById(R.id.spinner_saturday_schedule);
 
-        btnToggleDnd.setOnClickListener(v -> toggleDndScheduling());
-        btnRefreshTimetable.setOnClickListener(v -> refreshTimetable());
-        btnCheckNow.setOnClickListener(v -> checkCurrentDndStatus());
+        // Add null check and debugging for the button
+        if (btnToggleDnd == null) {
+            Log.e("MainActivity", "btnToggleDnd is null - check layout file");
+            return;
+        }
+        
+        Log.d("MainActivity", "Setting up button click listeners");
+        btnToggleDnd.setOnClickListener(v -> {
+            Log.d("MainActivity", "Toggle DND button clicked");
+            toggleDndScheduling();
+        });
+        
+        // Setup Saturday dropdown click listener
+        layoutSaturdayDropdown.setOnClickListener(v -> {
+            Log.d("MainActivity", "Saturday dropdown clicked");
+            spinnerSaturdaySchedule.performClick();
+        });
+        
+        // Setup swipe to refresh
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setOnRefreshListener(() -> {
+                Log.d("MainActivity", "Swipe refresh triggered");
+                refreshTimetable();
+            });
+            swipeRefreshLayout.setColorSchemeResources(
+                android.R.color.holo_blue_bright,
+                android.R.color.holo_green_light,
+                android.R.color.holo_orange_light,
+                android.R.color.holo_red_light);
+        }
     }
 
     private void setupManagers() {
         prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
         dndManager = DNDManager.getInstance(this);
+        
+        // Setup Saturday spinner after prefs is initialized
+        setupSaturdaySpinner();
     }
 
     private void setupUpdateHandler() {
@@ -86,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
         updateRunnable = new Runnable() {
             @Override
             public void run() {
-                updateCurrentTimeDisplay();
                 updateUI();
                 updateHandler.postDelayed(this, 30000);
             }
@@ -112,6 +159,127 @@ public class MainActivity extends AppCompatActivity {
         enableMultipleAlarmRedundancy();
         
         Log.d("MainActivity", "Enhanced reliability features initialized");
+    }
+
+    private void setupSaturdaySpinner() {
+        if (spinnerSaturdaySchedule == null) {
+            Log.e("MainActivity", "Saturday spinner is null");
+            return;
+        }
+
+        // Create spinner options
+        String[] saturdayOptions = {
+            "None (Holiday)",
+            "Monday",
+            "Tuesday", 
+            "Wednesday",
+            "Thursday",
+            "Friday"
+        };
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, 
+            R.layout.spinner_selected_item, saturdayOptions);
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
+        spinnerSaturdaySchedule.setAdapter(adapter);
+
+        // Load saved selection
+        String savedSelection = prefs.getString("saturday_follows", "None (Holiday)");
+        int position = 0;
+        for (int i = 0; i < saturdayOptions.length; i++) {
+            if (saturdayOptions[i].equals(savedSelection)) {
+                position = i;
+                break;
+            }
+        }
+        spinnerSaturdaySchedule.setSelection(position);
+        
+        // Update the TextView display
+        tvSaturdaySelection.setText(savedSelection);
+
+        // Set up selection listener with improved logic
+        spinnerSaturdaySchedule.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String selectedDay = saturdayOptions[position];
+                String previousSetting = getSaturdayFollowsDay();
+                
+                // Always save the selection regardless of service status
+                saveSaturdaySelection(selectedDay);
+                
+                // Update the TextView display
+                tvSaturdaySelection.setText(selectedDay);
+                
+                Log.d("MainActivity", "Saturday changed from '" + previousSetting + "' to '" + selectedDay + "'");
+                
+                // ONLY apply DND changes if auto-scheduling is ENABLED
+                if (!dndManager.isDndSchedulingEnabled()) {
+                    Log.d("MainActivity", "DND auto-scheduling is disabled - Saturday setting saved but not applied");
+                    updateUI(); // Just update UI to show the saved setting
+                    return; // Don't proceed with DND scheduling
+                }
+                
+                // Re-schedule DND since it's currently enabled
+                Log.d("MainActivity", "Re-scheduling DND with new Saturday setting");
+                
+                // First cancel all existing Saturday alarms to ensure clean slate
+                dndManager.cancelAllSaturdayAlarms();
+                
+                // If Saturday is set to "None (Holiday)", also turn off DND immediately if today is Saturday
+                if (selectedDay.equals("None (Holiday)")) {
+                    Calendar today = Calendar.getInstance();
+                    if (today.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY) {
+                        Log.d("MainActivity", "Saturday set to Holiday and today is Saturday - turning OFF DND immediately");
+                        dndManager.setDndOff();
+                    }
+                }
+                
+                // Then re-schedule everything including new Saturday setting
+                dndManager.scheduleDndForClasses();
+                
+                // Update UI to reflect Saturday changes
+                updateUI();
+                
+                // IMPORTANT: If today is Saturday, immediately check and apply DND status
+                Calendar today = Calendar.getInstance();
+                if (today.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY) {
+                    Log.d("MainActivity", "Today is Saturday - immediately checking DND status with new setting");
+                    
+                    // Force immediate DND status check with new Saturday setting
+                    dndManager.forceImmediateDndStatusCheck();
+                    
+                    // Update UI again to reflect any DND status changes
+                    updateUI();
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Do nothing
+            }
+        });
+    }
+
+    /**
+     * Save Saturday schedule selection to preferences
+     */
+    private void saveSaturdaySelection(String selectedDay) {
+        prefs.edit().putString("saturday_follows", selectedDay).apply();
+        Log.d("MainActivity", "Saved Saturday follows: " + selectedDay);
+    }
+
+    /**
+     * Get which day Saturday should follow
+     */
+    public String getSaturdayFollowsDay() {
+        return prefs.getString("saturday_follows", "None (Holiday)");
+    }
+
+    /**
+     * Static method for DNDManager to access Saturday settings
+     */
+    public static String getSaturdayFollowsDayStatic(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
+        return prefs.getString("saturday_follows", "None (Holiday)");
     }
 
     /**
@@ -146,24 +314,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void enableDNDScheduling() {
+        Log.d("MainActivity", "Enabling DND scheduling...");
+        
         // Schedule DND for classes with enhanced reliability
         dndManager.scheduleDndForClasses();
 
         // Start foreground service for reliable background operation
         DNDService.startService(this);
 
-
-        Toast.makeText(this, "DND scheduling enabled with background service", Toast.LENGTH_SHORT).show();
+        Log.d("MainActivity", "DND scheduling enabled successfully");
     }
 
     private void disableDNDScheduling() {
+        Log.d("MainActivity", "Disabling DND scheduling...");
+        
         // Cancel all DND schedules
         dndManager.cancelDndSchedules();
 
         // Stop foreground service
         DNDService.stopService(this);
 
-        Toast.makeText(this, "DND scheduling disabled", Toast.LENGTH_SHORT).show();
+        Log.d("MainActivity", "DND scheduling disabled successfully");
     }
 
     private void checkCurrentDndStatus() {
@@ -172,32 +343,42 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        Log.d("DND_DEBUG", "=== Starting DND status check ===");
         List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
+        Log.d("DND_DEBUG", "Retrieved " + allSlots.size() + " total slots for DND check");
+        
         List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
+        Log.d("DND_DEBUG", "Filtered to " + classSlots.size() + " slots for today's DND check");
 
         for (ClassTimeSlot slot : classSlots) {
             String time = new SimpleDateFormat("h:mm a", Locale.getDefault()).format(new Date(slot.getStartMillis())) +
                     " - " + new SimpleDateFormat("h:mm a", Locale.getDefault()).format(new Date(slot.getEndMillis()));
-            Log.d("TodaySlotDetail", time + " => " + slot.getSubject());
+            Log.d("DND_DEBUG", "DND Slot: " + time + " => " + slot.getSubject());
         }
 
         if (classSlots.isEmpty()) {
+            Log.d("DND_DEBUG", "No classes found for DND check");
             showNoTimetableData();
             return;
         }
 
+        Log.d("DND_DEBUG", "=== End DND status check ===");
         dndManager.checkAndSetCurrentDndStatus(classSlots);
         updateUI();
         updateTimetableStatus(classSlots);
     }
 
     private void toggleDndScheduling() {
+        Log.d("MainActivity", "toggleDndScheduling() called");
+        
         if (!hasDndAccess()) {
+            Log.d("MainActivity", "No DND access, showing permission required");
             showDndAccessRequired();
             return;
         }
 
         boolean isCurrentlyEnabled = dndManager.isDndSchedulingEnabled();
+        Log.d("MainActivity", "Current DND scheduling enabled: " + isCurrentlyEnabled);
 
         List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
         List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
@@ -208,16 +389,27 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (isCurrentlyEnabled) {
+            Log.d("MainActivity", "Disabling DND scheduling...");
             disableDNDScheduling();
+            Log.d("MainActivity", "After disable - isDndSchedulingEnabled: " + dndManager.isDndSchedulingEnabled());
         } else {
+            Log.d("MainActivity", "Enabling DND scheduling...");
             enableDNDScheduling();
+            Log.d("MainActivity", "After enable - isDndSchedulingEnabled: " + dndManager.isDndSchedulingEnabled());
         }
 
         updateUI();
     }
 
     private void refreshTimetable() {
-        Toast.makeText(this, "Redirecting to login for fresh timetable...", Toast.LENGTH_SHORT).show();
+        Log.d("MainActivity", "Refresh timetable triggered");
+        
+        // Stop the refresh animation
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setRefreshing(false);
+        }
+        
+        // Redirecting to login - removed toast
         Intent intent = new Intent(this, LoginActivity.class);
         startActivity(intent);
         finish();
@@ -226,6 +418,8 @@ public class MainActivity extends AppCompatActivity {
     private void updateUI() {
         boolean isSchedulingEnabled = dndManager.isDndSchedulingEnabled();
         boolean isDndCurrentlyOn = dndManager.isDndCurrentlyOn();
+        
+        Log.d("MainActivity", "Updating UI - Scheduling Enabled: " + isSchedulingEnabled + ", DND Currently On: " + isDndCurrentlyOn);
 
         if (isDndCurrentlyOn) {
             tvDndStatus.setText("DND is ON");
@@ -236,22 +430,46 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (isSchedulingEnabled) {
-            btnToggleDnd.setText("Disable Auto DND");
-            btnToggleDnd.setBackgroundColor(getResources().getColor(android.R.color.holo_red_light));
+            tvButtonStatus.setText("Disable");
+            // Keep using the modern ripple background instead of basic color
+            btnToggleDnd.setBackgroundResource(R.drawable.main_button_ripple);
             tvServiceStatus.setText("✓ Background service active");
             tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
         } else {
-            btnToggleDnd.setText("Enable Auto DND");
-            btnToggleDnd.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
+            tvButtonStatus.setText("Enable");
+            // Keep using the modern ripple background instead of basic color
+            btnToggleDnd.setBackgroundResource(R.drawable.main_button_ripple);
             tvServiceStatus.setText("✗ Background service inactive");
             tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
         }
 
-        updateNextClassInfo();
         updateReliabilityStatus();
 
+        // Add detailed logging for UI data retrieval
+        Log.d("UI_DEBUG", "=== Starting UI data retrieval ===");
         List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
+        Log.d("UI_DEBUG", "Retrieved " + allSlots.size() + " total slots from TimetableStore");
+        
+        // Log all retrieved slots with their times
+        for (int i = 0; i < allSlots.size(); i++) {
+            ClassTimeSlot slot = allSlots.get(i);
+            Calendar startCal = Calendar.getInstance();
+            startCal.setTimeInMillis(slot.getStartMillis());
+            Calendar endCal = Calendar.getInstance();
+            endCal.setTimeInMillis(slot.getEndMillis());
+            
+            String timeRange = String.format("%02d:%02d-%02d:%02d",
+                startCal.get(Calendar.HOUR_OF_DAY), startCal.get(Calendar.MINUTE),
+                endCal.get(Calendar.HOUR_OF_DAY), endCal.get(Calendar.MINUTE));
+            String dayName = getDayNameFromCalendar(startCal.get(Calendar.DAY_OF_WEEK));
+            
+            Log.d("UI_DEBUG", "Slot " + i + ": " + dayName + " " + timeRange + " - " + slot.getSubject());
+        }
+        
         List<ClassTimeSlot> todaySlots = getTodaySlots(allSlots);
+        Log.d("UI_DEBUG", "Filtered to " + todaySlots.size() + " slots for today's display");
+        Log.d("UI_DEBUG", "=== End UI data retrieval ===");
+        
         rvTodayClasses.setAdapter(new ClassSlotAdapter(todaySlots));
     }
 
@@ -292,20 +510,38 @@ public class MainActivity extends AppCompatActivity {
         }
         return false;
     }
+    
+    /**
+     * Check if this is the first launch or if no timetable data exists
+     * @return true if login is required, false otherwise
+     */
+    private boolean isFirstLaunchOrNoTimetableData() {
+        SharedPreferences prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
+        boolean isFirstLaunch = prefs.getBoolean("first_launch", true);
+        String timetableHtml = prefs.getString("timetable_html", "");
+        
+        // If it's first launch, save that we've launched once
+        if (isFirstLaunch) {
+            prefs.edit().putBoolean("first_launch", false).apply();
+        }
+        
+        return isFirstLaunch || timetableHtml.isEmpty();
+    }
 
     private void updateCurrentTimeDisplay() {
+        // Current time display removed from UI for cleaner design
         Calendar now = Calendar.getInstance();
-        String currentTime = String.format("Current Time: %02d:%02d",
-                now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
-        tvCurrentTime.setText(currentTime);
+        Log.d("MainActivity", String.format("Current Time: %02d:%02d",
+                now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE)));
     }
 
     private void updateNextClassInfo() {
+        // Next class info display removed from UI for cleaner design
         List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
         List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
 
         if (classSlots.isEmpty()) {
-            tvNextClass.setText("No timetable data available");
+            Log.d("MainActivity", "No timetable data available");
             return;
         }
 
@@ -314,18 +550,15 @@ public class MainActivity extends AppCompatActivity {
 
         String currentClassInfo = getCurrentClassInfo(classSlots, currentTimeInMinutes);
         if (!currentClassInfo.isEmpty()) {
-            tvNextClass.setText("Current Class: " + currentClassInfo);
-            tvNextClass.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            Log.d("MainActivity", "Current Class: " + currentClassInfo);
             return;
         }
 
         String nextClassInfo = getNextClassInfo(classSlots, currentTimeInMinutes);
         if (!nextClassInfo.isEmpty()) {
-            tvNextClass.setText("Next Class: " + nextClassInfo);
-            tvNextClass.setTextColor(getResources().getColor(android.R.color.holo_blue_dark));
+            Log.d("MainActivity", "Next Class: " + nextClassInfo);
         } else {
-            tvNextClass.setText("No more classes today");
-            tvNextClass.setTextColor(getResources().getColor(android.R.color.darker_gray));
+            Log.d("MainActivity", "No more classes today");
         }
     }
 
@@ -372,23 +605,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateTimetableStatus(List<ClassTimeSlot> classSlots) {
+        // Timetable status update - display removed from UI for cleaner design
         long fetchTime = prefs.getLong("timetable_fetch_time", 0);
-
-        if (fetchTime == 0) {
-            tvTimetableStatus.setText("No timetable data");
-            tvTimetableStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
-        } else {
-            Calendar fetchCal = Calendar.getInstance();
-            fetchCal.setTimeInMillis(fetchTime);
-
-            String statusText = String.format("Timetable: %d classes found\nLast updated: %02d:%02d",
-                    classSlots.size(),
-                    fetchCal.get(Calendar.HOUR_OF_DAY),
-                    fetchCal.get(Calendar.MINUTE));
-
-            tvTimetableStatus.setText(statusText);
-            tvTimetableStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
-        }
+        Log.d("MainActivity", "Timetable status: " + classSlots.size() + " classes found");
     }
 
     private void showDndAccessRequired() {
@@ -399,9 +618,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showNoTimetableData() {
-        Toast.makeText(this, "No timetable data found. Please refresh timetable.", Toast.LENGTH_LONG).show();
-        tvTimetableStatus.setText("❌ No timetable data available");
-        tvTimetableStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+        // No timetable data found - removed toast and UI status for cleaner design
+        Log.d("MainActivity", "No timetable data available");
     }
 
     private boolean hasDndAccess() {
@@ -414,11 +632,43 @@ public class MainActivity extends AppCompatActivity {
         Calendar today = Calendar.getInstance();
         int todayDay = today.get(Calendar.DAY_OF_WEEK);
 
+        Log.d("TodaySlots", "Today is: " + getDayNameFromCalendar(todayDay) + " (" + todayDay + ")");
+        Log.d("TodaySlots", "Total slots to check: " + allSlots.size());
+
+        // Handle Saturday compensation
+        if (todayDay == Calendar.SATURDAY) {
+            String saturdayFollows = getSaturdayFollowsDay();
+            if (!saturdayFollows.equals("None (Holiday)")) {
+                int targetDay = getDayOfWeekFromString(saturdayFollows);
+                if (targetDay != -1) {
+                    // Show the classes from the day Saturday is following
+                    for (ClassTimeSlot slot : allSlots) {
+                        Calendar slotCal = Calendar.getInstance();
+                        slotCal.setTimeInMillis(slot.getStartMillis());
+                        if (slotCal.get(Calendar.DAY_OF_WEEK) == targetDay) {
+                            todaySlots.add(slot);
+                        }
+                    }
+                    Log.d("TodaySlots", "Saturday following " + saturdayFollows + " - Found " + todaySlots.size() + " slots");
+                    return todaySlots;
+                }
+            }
+            // If Saturday is set to "None (Holiday)", return empty list
+            Log.d("TodaySlots", "Saturday is a holiday - no classes");
+            return todaySlots;
+        }
+
+        // Normal day processing
         for (ClassTimeSlot slot : allSlots) {
             Calendar slotCal = Calendar.getInstance();
             slotCal.setTimeInMillis(slot.getStartMillis());
-            if (slotCal.get(Calendar.DAY_OF_WEEK) == todayDay) {
+            int slotDay = slotCal.get(Calendar.DAY_OF_WEEK);
+            
+            Log.d("TodaySlots", "Checking slot: " + slot.getSubject() + " on day " + getDayNameFromCalendar(slotDay) + " (" + slotDay + ")");
+            
+            if (slotDay == todayDay) {
                 todaySlots.add(slot);
+                Log.d("TodaySlots", "Added slot: " + slot.getSubject() + " at " + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(new java.util.Date(slot.getStartMillis())));
             }
         }
 
@@ -426,11 +676,42 @@ public class MainActivity extends AppCompatActivity {
         return todaySlots;
     }
 
+    /**
+     * Convert day name to Calendar day constant
+     */
+    private int getDayOfWeekFromString(String dayName) {
+        switch (dayName) {
+            case "Monday": return Calendar.MONDAY;
+            case "Tuesday": return Calendar.TUESDAY;
+            case "Wednesday": return Calendar.WEDNESDAY;
+            case "Thursday": return Calendar.THURSDAY;
+            case "Friday": return Calendar.FRIDAY;
+            default: return -1; // Invalid day
+        }
+    }
+
+    /**
+     * Convert Calendar day constant to day name
+     */
+    private String getDayNameFromCalendar(int dayOfWeek) {
+        switch (dayOfWeek) {
+            case Calendar.SUNDAY: return "Sunday";
+            case Calendar.MONDAY: return "Monday";
+            case Calendar.TUESDAY: return "Tuesday";
+            case Calendar.WEDNESDAY: return "Wednesday";
+            case Calendar.THURSDAY: return "Thursday";
+            case Calendar.FRIDAY: return "Friday";
+            case Calendar.SATURDAY: return "Saturday";
+            default: return "Unknown";
+        }
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         updateHandler.post(updateRunnable);
         checkCurrentDndStatus();
+        updateUI(); // Refresh UI state when returning to activity
     }
 
     @Override

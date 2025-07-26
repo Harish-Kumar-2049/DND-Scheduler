@@ -1,90 +1,185 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/swipe_refresh_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<ScrollView
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:background="@color/main_background">
 
-    <TextView
-        android:id="@+id/tv_dnd_status"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="DND Auto-Scheduling is OFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:padding="12dp"
-        android:background="@drawable/rounded_background"
-        android:layout_marginBottom="16dp" />
+        android:orientation="vertical"
+        android:padding="24dp">
 
-    <TextView
-        android:id="@+id/tv_service_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Service Status"
-        android:textSize="14sp"
-        android:layout_marginTop="8dp" />
+        <!-- Header Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/status_card_background"
+            android:padding="32dp"
+            android:layout_marginBottom="24dp"
+            android:elevation="6dp">
 
-    <Button
-        android:id="@+id/btn_toggle_dnd"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Turn ON DND Auto-Scheduling"
-        android:textSize="16sp"
-        android:layout_marginBottom="16dp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="DND Scheduler"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary"
+                android:gravity="center"
+                android:layout_marginBottom="20dp"/>
 
-    <TextView
-        android:id="@+id/tv_today_label"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Today's Classes"
-        android:textStyle="bold"
-        android:textSize="16sp"
-        android:layout_marginBottom="8dp" />
+            <TextView
+                android:id="@+id/tv_dnd_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="DND Auto-Scheduling is OFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_color"
+                android:gravity="center"
+                android:layout_marginBottom="16dp" />
 
-    <TextView
-        android:id="@+id/tv_current_time"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Current Time: --:--"
-        android:textSize="14sp"
-        android:layout_marginBottom="8dp" />
+            <TextView
+                android:id="@+id/tv_service_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Service Status"
+                android:textSize="16sp"
+                android:textColor="@color/hint_color"
+                android:gravity="center" />
 
-    <TextView
-        android:id="@+id/tv_next_class"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Next Class: --"
-        android:textSize="14sp"
-        android:layout_marginBottom="8dp" />
+        </LinearLayout>
 
-    <TextView
-        android:id="@+id/tv_timetable_status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Timetable Loaded"
-        android:textSize="14sp"
-        android:textColor="#4CAF50"
-        android:layout_marginBottom="16dp" />
+        <!-- Button and Dropdown Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="32dp"
+            android:weightSum="2">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_today_classes"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"/>
+            <!-- Stylish Toggle Button - Styled as Dropdown -->
+            <LinearLayout
+                android:id="@+id/btn_toggle_dnd"
+                android:layout_width="0dp"
+                android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/main_button_ripple"
+                android:padding="12dp"
+                android:elevation="6dp"
+                android:clickable="true"
+                android:focusable="true">
 
-    <Button
-        android:id="@+id/btn_refresh_timetable"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Refresh Timetable"
-        android:layout_marginBottom="12dp" />
+                <TextView
+                    android:id="@+id/tv_button_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Auto DND:"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:layout_marginBottom="6dp"
+                    android:gravity="center" />
 
-    <Button
-        android:id="@+id/btn_check_now"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Check Now"
-        android:layout_marginBottom="12dp" />
+                <TextView
+                    android:id="@+id/tv_button_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Enable"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:gravity="center" />
 
-</LinearLayout>
+            </LinearLayout>
+
+            <!-- Saturday Schedule Dropdown - Styled as Button -->
+            <LinearLayout
+                android:id="@+id/layout_saturday_dropdown"
+                android:layout_width="0dp"
+                android:layout_height="76dp"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/main_button_ripple"
+                android:padding="12dp"
+                android:elevation="6dp"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Saturday follows:"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:layout_marginBottom="6dp"
+                    android:gravity="center" />
+
+                <TextView
+                    android:id="@+id/tv_saturday_selection"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="None (Holiday)"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:gravity="center" />
+
+                <Spinner
+                    android:id="@+id/spinner_saturday_schedule"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:background="@android:color/transparent"
+                    android:spinnerMode="dropdown"
+                    android:popupBackground="@drawable/dropdown_popup_background"
+                    android:visibility="invisible" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Today's Classes Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:padding="24dp"
+            android:layout_marginBottom="24dp"
+            android:elevation="3dp">
+
+            <TextView
+                android:id="@+id/tv_today_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📖 Today's Classes"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/text_color"
+                android:layout_marginBottom="20dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_today_classes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                android:minHeight="150dp"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
+</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

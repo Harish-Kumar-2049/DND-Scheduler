@@ -22,7 +22,7 @@ public class DNDManager {
     private final NotificationManager notificationManager;
     private final SharedPreferences prefs;
     private static final String TAG = "DNDManager";
-    private boolean isRequestingDndAccess = false; // Flag to prevent multiple permission requests
+    private boolean isRequestingDndAccess = false; 
 
     private DNDManager(Context context) {
         this.context = context.getApplicationContext(); // Use app context to prevent leaks
@@ -42,12 +42,16 @@ public class DNDManager {
         List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(context);
 
         if (slots == null || slots.isEmpty()) {
-            Toast.makeText(context, "No timetable data available.", Toast.LENGTH_SHORT).show();
+            // No timetable data available
             return;
         }
 
         // First, cancel all existing alarms to avoid duplicates
         cancelAllAlarms();
+
+        // Get Saturday configuration from MainActivity
+        String saturdayFollows = getSaturdayFollowsDay();
+        Log.d(TAG, "Saturday follows: " + saturdayFollows);
 
         for (ClassTimeSlot slot : slots) {
             Calendar start = Calendar.getInstance();
@@ -58,25 +62,64 @@ public class DNDManager {
 
             int dayOfWeek = start.get(Calendar.DAY_OF_WEEK);
 
-            // Generate unique request codes to avoid collisions
-            int startRequestCode = generateRequestCode(dayOfWeek, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE), true);
-            int endRequestCode = generateRequestCode(dayOfWeek, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE), false);
+            // Schedule for the original day
+            scheduleSlotForDay(slot, start, end, dayOfWeek);
 
-            // Schedule exact alarms for each class
-            scheduleExactRecurringAlarm(dayOfWeek, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE),
-                    "TURN_ON_DND", startRequestCode);
-
-            scheduleExactRecurringAlarm(dayOfWeek, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE),
-                    "TURN_OFF_DND", endRequestCode);
-
-            Log.d(TAG, "Scheduled exact alarms for day " + dayOfWeek + ": ON at " +
-                    start.get(Calendar.HOUR_OF_DAY) + ":" + start.get(Calendar.MINUTE));
+            // Handle Saturday compensation
+            if (!saturdayFollows.equals("None (Holiday)")) {
+                int saturdayTargetDay = getDayOfWeekFromString(saturdayFollows);
+                if (dayOfWeek == saturdayTargetDay) {
+                    // This day's schedule should also apply to Saturday
+                    scheduleSlotForDay(slot, start, end, Calendar.SATURDAY);
+                    Log.d(TAG, "Scheduled Saturday to follow " + saturdayFollows + " for " + slot.getSubject());
+                }
+            }
         }
 
         // Schedule a periodic check alarm every 10 minutes
         schedulePeriodicCheck();
 
         prefs.edit().putBoolean("dnd_scheduling_enabled", true).apply();
+    }
+
+    /**
+     * Schedule alarms for a specific slot and day
+     */
+    private void scheduleSlotForDay(ClassTimeSlot slot, Calendar start, Calendar end, int dayOfWeek) {
+        // Generate unique request codes to avoid collisions
+        int startRequestCode = generateRequestCode(dayOfWeek, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE), true);
+        int endRequestCode = generateRequestCode(dayOfWeek, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE), false);
+
+        // Schedule exact alarms for each class
+        scheduleExactRecurringAlarm(dayOfWeek, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE),
+                "TURN_ON_DND", startRequestCode);
+
+        scheduleExactRecurringAlarm(dayOfWeek, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE),
+                "TURN_OFF_DND", endRequestCode);
+
+        Log.d(TAG, "Scheduled exact alarms for day " + dayOfWeek + ": ON at " +
+                start.get(Calendar.HOUR_OF_DAY) + ":" + start.get(Calendar.MINUTE));
+    }
+
+    /**
+     * Get which day Saturday should follow from preferences
+     */
+    private String getSaturdayFollowsDay() {
+        return MainActivity.getSaturdayFollowsDayStatic(context);
+    }
+
+    /**
+     * Convert day name to Calendar day constant
+     */
+    private int getDayOfWeekFromString(String dayName) {
+        switch (dayName) {
+            case "Monday": return Calendar.MONDAY;
+            case "Tuesday": return Calendar.TUESDAY;
+            case "Wednesday": return Calendar.WEDNESDAY;
+            case "Thursday": return Calendar.THURSDAY;
+            case "Friday": return Calendar.FRIDAY;
+            default: return -1; // Invalid day
+        }
     }
 
     private int generateRequestCode(int dayOfWeek, int hour, int minute, boolean isStart) {
@@ -183,6 +226,25 @@ public class DNDManager {
         boolean inClass = false;
         String currentClassName = "";
 
+        // Handle Saturday compensation
+        String saturdayFollows = getSaturdayFollowsDay();
+        boolean isSaturday = (today == Calendar.SATURDAY);
+        int targetDay = today;
+        
+        if (isSaturday && !saturdayFollows.equals("None (Holiday)")) {
+            targetDay = getDayOfWeekFromString(saturdayFollows);
+            Log.d(TAG, "Saturday following " + saturdayFollows + " schedule (target day: " + targetDay + ")");
+        } else if (isSaturday) {
+            Log.d(TAG, "Saturday is a holiday - checking if DND should be turned off");
+            // Saturday is a holiday, but we still need to check if DND is currently on and turn it off
+            boolean currentDndStatus = isDndCurrentlyOn();
+            if (currentDndStatus && wasDndSetByApp()) {
+                setDndOff();
+                Log.d(TAG, "Saturday is holiday and DND was on - turning DND OFF");
+            }
+            return; // No classes scheduled for Saturday holiday
+        }
+
         for (ClassTimeSlot slot : classSlots) {
             Calendar start = Calendar.getInstance();
             start.setTimeInMillis(slot.getStartMillis());
@@ -190,16 +252,27 @@ public class DNDManager {
             Calendar end = Calendar.getInstance();
             end.setTimeInMillis(slot.getEndMillis());
 
-            if (start.get(Calendar.DAY_OF_WEEK) != today) continue;
+            int slotDay = start.get(Calendar.DAY_OF_WEEK);
+
+            // Check if this slot applies to today
+            boolean slotApplies = false;
+            if (isSaturday && !saturdayFollows.equals("None (Holiday)")) {
+                // On Saturday, check if this slot is from the day Saturday is following
+                slotApplies = (slotDay == targetDay);
+            } else {
+                // Normal day, check if slot matches today
+                slotApplies = (slotDay == today);
+            }
+
+            if (!slotApplies) continue;
 
             int startMin = start.get(Calendar.HOUR_OF_DAY) * 60 + start.get(Calendar.MINUTE);
             int endMin = end.get(Calendar.HOUR_OF_DAY) * 60 + end.get(Calendar.MINUTE);
 
             if (nowMinutes >= startMin && nowMinutes < endMin) {
                 inClass = true;
-                // Assuming ClassTimeSlot has a getClassName() method
-                // currentClassName = slot.getClassName();
-                Log.d(TAG, "Currently in class: " + startMin + "-" + endMin + " (now: " + nowMinutes + ")");
+                currentClassName = slot.getSubject();
+                Log.d(TAG, "Currently in class: " + currentClassName + " (" + startMin + "-" + endMin + ", now: " + nowMinutes + ")");
                 break;
             }
         }
@@ -209,10 +282,12 @@ public class DNDManager {
 
         if (inClass && !currentDndStatus) {
             setDndOn();
-            Log.d(TAG, "In class: Turning DND ON");
+            Log.d(TAG, "In class: Turning DND ON immediately");
         } else if (!inClass && currentDndStatus && wasDndSetByApp()) {
             setDndOff();
-            Log.d(TAG, "Not in class: Turning DND OFF");
+            Log.d(TAG, "Not in class: Turning DND OFF immediately");
+        } else {
+            Log.d(TAG, "No DND change needed - InClass: " + inClass + ", CurrentDND: " + currentDndStatus + ", SetByApp: " + wasDndSetByApp());
         }
     }
 
@@ -247,6 +322,8 @@ public class DNDManager {
         List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(context);
 
         if (slots != null) {
+            String saturdayFollows = getSaturdayFollowsDay();
+            
             for (ClassTimeSlot slot : slots) {
                 Calendar start = Calendar.getInstance();
                 start.setTimeInMillis(slot.getStartMillis());
@@ -255,16 +332,79 @@ public class DNDManager {
                 end.setTimeInMillis(slot.getEndMillis());
 
                 int dayOfWeek = start.get(Calendar.DAY_OF_WEEK);
+                
+                // Cancel alarms for the original day
                 int startRequestCode = generateRequestCode(dayOfWeek, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE), true);
                 int endRequestCode = generateRequestCode(dayOfWeek, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE), false);
 
                 cancelAlarm(startRequestCode, "TURN_ON_DND");
                 cancelAlarm(endRequestCode, "TURN_OFF_DND");
+
+                // Cancel Saturday compensation alarms if they exist
+                if (!saturdayFollows.equals("None (Holiday)")) {
+                    int saturdayTargetDay = getDayOfWeekFromString(saturdayFollows);
+                    if (dayOfWeek == saturdayTargetDay) {
+                        // Cancel Saturday alarms for this slot
+                        int satStartRequestCode = generateRequestCode(Calendar.SATURDAY, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE), true);
+                        int satEndRequestCode = generateRequestCode(Calendar.SATURDAY, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE), false);
+                        
+                        cancelAlarm(satStartRequestCode, "TURN_ON_DND");
+                        cancelAlarm(satEndRequestCode, "TURN_OFF_DND");
+                        Log.d(TAG, "Cancelled Saturday compensation alarms for " + slot.getSubject());
+                    }
+                }
             }
         }
 
         // Cancel periodic check
         cancelAlarm(9999, "PERIODIC_CHECK");
+    }
+
+    /**
+     * Cancel all possible Saturday alarms for all weekdays
+     * This is used when Saturday setting changes to ensure clean slate
+     */
+    public void cancelAllSaturdayAlarms() {
+        List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(context);
+        if (slots == null) return;
+
+        Log.d(TAG, "Cancelling all possible Saturday alarms...");
+
+        // Cancel Saturday alarms for all possible time slots
+        for (ClassTimeSlot slot : slots) {
+            Calendar start = Calendar.getInstance();
+            start.setTimeInMillis(slot.getStartMillis());
+
+            Calendar end = Calendar.getInstance();
+            end.setTimeInMillis(slot.getEndMillis());
+
+            // Generate Saturday alarm request codes for this time slot
+            int satStartRequestCode = generateRequestCode(Calendar.SATURDAY, 
+                start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE), true);
+            int satEndRequestCode = generateRequestCode(Calendar.SATURDAY, 
+                end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE), false);
+            
+            cancelAlarm(satStartRequestCode, "TURN_ON_DND");
+            cancelAlarm(satEndRequestCode, "TURN_OFF_DND");
+        }
+
+        Log.d(TAG, "All Saturday alarms cancelled");
+    }
+
+    /**
+     * Force an immediate DND status check and update
+     * Useful when settings change and we need immediate effect
+     */
+    public void forceImmediateDndStatusCheck() {
+        Log.d(TAG, "Forcing immediate DND status check...");
+        
+        // Get all slots and check current status
+        List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(context);
+        if (slots != null && !slots.isEmpty()) {
+            checkAndSetCurrentDndStatus(slots);
+        } else {
+            Log.w(TAG, "No slots available for immediate DND check");
+        }
     }
 
     private void cancelAlarm(int requestCode, String action) {

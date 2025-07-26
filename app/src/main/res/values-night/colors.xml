@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="login_background">#121212</color>
+    <color name="login_card_background">#1F1F1F</color>
+    <color name="button_color">#7C4DFF</color>
+    <color name="text_color">#F5F5F5</color>
+    <color name="hint_color">#BDBDBD</color>
+    <color name="primary">#7C4DFF</color>
+    <color name="success_color">#66BB6A</color>
+    <color name="warning_color">#FFA726</color>
+    <color name="error_color">#EF5350</color>
+    <color name="main_background">#121212</color>
+    <color name="card_background">#1F1F1F</color>
+    <color name="class_item_background">#2D2D2D</color>
+    <color name="class_item_border">#5E35B1</color>
+</resources>

@@ -33,18 +33,7 @@
                 android:textStyle="bold"
                 android:textColor="@color/primary"
                 android:gravity="center"
-                android:layout_marginBottom="20dp"/>
-
-            <TextView
-                android:id="@+id/tv_dnd_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="DND Auto-Scheduling is OFF"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_color"
-                android:gravity="center"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="24dp"/>
 
             <TextView
                 android:id="@+id/tv_service_status"

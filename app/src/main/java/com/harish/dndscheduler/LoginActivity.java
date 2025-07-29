@@ -215,7 +215,8 @@ public class LoginActivity extends AppCompatActivity {
                 Log.e("LoginError", "Login error", e);
                 mainHandler.post(() -> {
                     showLoading(false);
-                    // Login error - removed toast
+                    // Show network error to user
+                    Toast.makeText(LoginActivity.this, "Login failed. Please check your internet connection and try again.", Toast.LENGTH_LONG).show();
                     fetchLoginPageAndCaptcha();
                 });
             }
@@ -289,7 +290,8 @@ public class LoginActivity extends AppCompatActivity {
                 errorMessage = "Invalid credentials. Please check your registration number and password.";
             }
 
-            // Error message - removed toast
+            // Show error message to user
+            Toast.makeText(LoginActivity.this, errorMessage, Toast.LENGTH_LONG).show();
             fetchLoginPageAndCaptcha(); // Refresh captcha
         });
     }

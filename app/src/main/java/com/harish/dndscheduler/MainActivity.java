@@ -35,7 +35,6 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    private TextView tvDndStatus;
     private TextView tvServiceStatus;
     private LinearLayout btnToggleDnd;
     private TextView tvButtonStatus;
@@ -79,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initializeViews() {
-        tvDndStatus = findViewById(R.id.tv_dnd_status);
         tvServiceStatus = findViewById(R.id.tv_service_status);
         btnToggleDnd = findViewById(R.id.btn_toggle_dnd);
         tvButtonStatus = findViewById(R.id.tv_button_status);
@@ -421,14 +419,6 @@ public class MainActivity extends AppCompatActivity {
         
         Log.d("MainActivity", "Updating UI - Scheduling Enabled: " + isSchedulingEnabled + ", DND Currently On: " + isDndCurrentlyOn);
 
-        if (isDndCurrentlyOn) {
-            tvDndStatus.setText("DND is ON");
-            tvDndStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
-        } else {
-            tvDndStatus.setText("DND is OFF");
-            tvDndStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
-        }
-
         if (isSchedulingEnabled) {
             tvButtonStatus.setText("Disable");
             // Keep using the modern ripple background instead of basic color
@@ -612,8 +602,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void showDndAccessRequired() {
         Toast.makeText(this, "Grant Do Not Disturb access in settings.", Toast.LENGTH_LONG).show();
-        tvDndStatus.setText("⚠️ DND Access Required");
-        tvDndStatus.setTextColor(getResources().getColor(android.R.color.holo_orange_dark));
         startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
     }
 

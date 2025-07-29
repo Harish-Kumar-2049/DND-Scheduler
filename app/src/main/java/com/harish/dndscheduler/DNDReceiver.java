@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.util.Log;
 import java.util.Calendar;
@@ -13,6 +14,15 @@ public class DNDReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        SharedPreferences prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
+        boolean isSchedulingEnabled = prefs.getBoolean("dnd_scheduling_enabled", true);
+
+        if (!isSchedulingEnabled) {
+            Log.d("DNDReceiver", "DND scheduling is disabled. Ignoring alarm.");
+            return; // Do nothing if scheduling is disabled
+        }
+
+        // Existing code for handling DND ON/OFF actions
         String action = intent.getAction();
         Log.d("DNDReceiver", "Alarm received: " + action);
 
@@ -20,6 +30,12 @@ public class DNDReceiver extends BroadcastReceiver {
             DNDManager dndManager = DNDManager.getInstance(context);
 
             if ("TURN_ON_DND".equals(action) || "TURN_ON_DND_BACKUP".equals(action)) {
+                // Check if DND scheduling is still enabled
+                if (!dndManager.isDndSchedulingEnabled()) {
+                    Log.d("DNDReceiver", "DND scheduling is disabled - ignoring TURN_ON_DND alarm");
+                    return;
+                }
+                
                 boolean isBackup = intent.getBooleanExtra("isBackup", false);
                 if (dndManager.setDndOn()) {
                     Log.d("DNDReceiver", "DND turned ON via " + (isBackup ? "backup " : "") + "alarm");
@@ -31,6 +47,12 @@ public class DNDReceiver extends BroadcastReceiver {
                 }
                 
             } else if ("TURN_OFF_DND".equals(action) || "TURN_OFF_DND_BACKUP".equals(action)) {
+                // Check if DND scheduling is still enabled
+                if (!dndManager.isDndSchedulingEnabled()) {
+                    Log.d("DNDReceiver", "DND scheduling is disabled - ignoring TURN_OFF_DND alarm");
+                    return;
+                }
+                
                 boolean isBackup = intent.getBooleanExtra("isBackup", false);
                 if (dndManager.setDndOff()) {
                     Log.d("DNDReceiver", "DND turned OFF via " + (isBackup ? "backup " : "") + "alarm");
@@ -42,6 +64,11 @@ public class DNDReceiver extends BroadcastReceiver {
                 }
                 
             } else if ("PERIODIC_CHECK".equals(action)) {
+                // Check if DND scheduling is still enabled before periodic check
+                if (!dndManager.isDndSchedulingEnabled()) {
+                    Log.d("DNDReceiver", "DND scheduling is disabled - ignoring periodic check");
+                    return;
+                }
                 dndManager.checkAndSetCurrentDndStatus(null);
                 Log.d("DNDReceiver", "Periodic DND status check completed");
                 

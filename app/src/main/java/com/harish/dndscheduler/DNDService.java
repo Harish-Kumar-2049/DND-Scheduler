@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -46,8 +47,12 @@ public class DNDService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d("DNDService", "DND Service started");
 
-        // Check DND status immediately
-        dndManager.checkAndSetCurrentDndStatus(null);
+        // Check DND status immediately only if scheduling is enabled
+        if (dndManager.isDndSchedulingEnabled()) {
+            dndManager.checkAndSetCurrentDndStatus(null);
+        } else {
+            Log.d("DNDService", "DND scheduling disabled - skipping immediate DND check");
+        }
 
         // Return START_STICKY to restart service if killed
         return START_STICKY;
@@ -111,23 +116,25 @@ public class DNDService extends Service {
             @Override
             public void run() {
                 try {
-                    // Primary check
-                    dndManager.checkAndSetCurrentDndStatus(null);
-                    
-                    // Verify alarm status periodically
-                    verifyAlarmStatus();
-                    
-                    Log.d("DNDService", "Enhanced periodic DND check completed");
+                    if (dndManager.isDndSchedulingEnabled()) {
+                        // Primary check
+                        dndManager.checkAndSetCurrentDndStatus(null);
+                        // Verify alarm status periodically
+                        verifyAlarmStatus();
+                        Log.d("DNDService", "Enhanced periodic DND check completed");
+                    } else {
+                        // If scheduling is disabled, ensure DND is OFF and do not perform any checks
+                        dndManager.setDndOff();
+                        Log.d("DNDService", "DND scheduling disabled - forcibly turning DND OFF and skipping periodic check");
+                    }
                 } catch (Exception e) {
                     Log.e("DNDService", "Error in enhanced periodic check", e);
                 }
-
                 // Schedule next check with variable interval to avoid predictable patterns
                 int nextInterval = CHECK_INTERVAL + (int)(Math.random() * 60000); // ±1 minute variation
                 handler.postDelayed(this, nextInterval);
             }
         };
-
         handler.post(checkRunnable);
     }
 
@@ -135,20 +142,12 @@ public class DNDService extends Service {
      * Verify that critical alarms are still scheduled
      */
     private void verifyAlarmStatus() {
-        try {
-            if (dndManager.isDndSchedulingEnabled()) {
-                // Check if we have upcoming alarms - if not, reschedule
-                // This serves as a failsafe against alarm system cleanup
-                
-                List<ClassTimeSlot> todaySlots = TimetableStore.getClassTimeSlots(this);
-                if (todaySlots.isEmpty()) {
-                    Log.w("DNDService", "No class slots found - triggering alarm refresh");
-                    dndManager.scheduleDndForClasses();
-                }
-            }
-        } catch (Exception e) {
-            Log.e("DNDService", "Error verifying alarm status", e);
+        if (!dndManager.isDndSchedulingEnabled()) {
+            Log.d("DNDService", "DND scheduling is disabled. Skipping alarm verification.");
+            return;
         }
+        // Existing code for verifying alarm status
+        DNDManager.getInstance(this).checkAndSetCurrentDndStatus(null);
     }
 
     public static void startService(Context context) {

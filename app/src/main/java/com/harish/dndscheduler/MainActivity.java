@@ -68,7 +68,7 @@ public class MainActivity extends AppCompatActivity {
         setupUpdateHandler();
 
         rvTodayClasses.setLayoutManager(new LinearLayoutManager(this));
-        checkCurrentDndStatus();
+        checkCurrentDndStatus(false); // Don't auto-show settings on app start
 
         // Initialize UI state
         updateUI();
@@ -336,8 +336,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void checkCurrentDndStatus() {
+        checkCurrentDndStatus(true); // Default behavior - show settings if needed
+    }
+
+    private void checkCurrentDndStatus(boolean showSettingsIfNeeded) {
         if (!hasDndAccess()) {
-            showDndAccessRequired();
+            if (showSettingsIfNeeded) {
+                showDndAccessRequired();
+            }
             return;
         }
 
@@ -367,33 +373,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toggleDndScheduling() {
-        Log.d("MainActivity", "toggleDndScheduling() called");
-        
         if (!hasDndAccess()) {
-            Log.d("MainActivity", "No DND access, showing permission required");
             showDndAccessRequired();
             return;
         }
 
         boolean isCurrentlyEnabled = dndManager.isDndSchedulingEnabled();
-        Log.d("MainActivity", "Current DND scheduling enabled: " + isCurrentlyEnabled);
-
-        List<ClassTimeSlot> allSlots = TimetableStore.getClassTimeSlots(this);
-        List<ClassTimeSlot> classSlots = getTodaySlots(allSlots);
-
-        if (classSlots.isEmpty()) {
-            showNoTimetableData();
-            return;
-        }
 
         if (isCurrentlyEnabled) {
-            Log.d("MainActivity", "Disabling DND scheduling...");
             disableDNDScheduling();
-            Log.d("MainActivity", "After disable - isDndSchedulingEnabled: " + dndManager.isDndSchedulingEnabled());
+            prefs.edit().putBoolean("dnd_scheduling_enabled", false).apply(); // Update preference
         } else {
-            Log.d("MainActivity", "Enabling DND scheduling...");
             enableDNDScheduling();
-            Log.d("MainActivity", "After enable - isDndSchedulingEnabled: " + dndManager.isDndSchedulingEnabled());
+            prefs.edit().putBoolean("dnd_scheduling_enabled", true).apply(); // Update preference
         }
 
         updateUI();

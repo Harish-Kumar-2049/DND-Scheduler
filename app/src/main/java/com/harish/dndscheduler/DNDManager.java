@@ -229,8 +229,7 @@ public class DNDManager {
         // Handle Saturday compensation
         String saturdayFollows = getSaturdayFollowsDay();
         boolean isSaturday = (today == Calendar.SATURDAY);
-        int targetDay = today;
-        
+        int targetDay = -1;
         if (isSaturday && !saturdayFollows.equals("None (Holiday)")) {
             targetDay = getDayOfWeekFromString(saturdayFollows);
             Log.d(TAG, "Saturday following " + saturdayFollows + " schedule (target day: " + targetDay + ")");
@@ -310,12 +309,62 @@ public class DNDManager {
     }
 
     public void cancelDndSchedules() {
+        Log.d(TAG, "=== Starting to cancel all DND schedules ===");
+        
+        // First, try the comprehensive approach
         cancelAllAlarms();
+        
+        // Nuclear option: try to cancel with different intent patterns
+        cancelAlarmsWithDifferentPatterns();
+        
         if (wasDndSetByApp()) {
             setDndOff();
+            Log.d(TAG, "DND was set by app, turning it OFF");
         }
         prefs.edit().putBoolean("dnd_scheduling_enabled", false).apply();
+        Log.d(TAG, "Set dnd_scheduling_enabled to false");
         Log.d(TAG, "Cancelled all DND alarms");
+        Log.d(TAG, "=== Finished cancelling all DND schedules ===");
+    }
+
+    /**
+     * Nuclear option: try different intent patterns to ensure all alarms are cancelled
+     */
+    private void cancelAlarmsWithDifferentPatterns() {
+        Log.d(TAG, "Using nuclear cancellation approach...");
+        
+        List<ClassTimeSlot> slots = TimetableStore.getClassTimeSlots(context);
+        if (slots != null) {
+            for (ClassTimeSlot slot : slots) {
+                Calendar start = Calendar.getInstance();
+                start.setTimeInMillis(slot.getStartMillis());
+                Calendar end = Calendar.getInstance();
+                end.setTimeInMillis(slot.getEndMillis());
+                int dayOfWeek = start.get(Calendar.DAY_OF_WEEK);
+                
+                int startRequestCode = generateRequestCode(dayOfWeek, start.get(Calendar.HOUR_OF_DAY), start.get(Calendar.MINUTE), true);
+                int endRequestCode = generateRequestCode(dayOfWeek, end.get(Calendar.HOUR_OF_DAY), end.get(Calendar.MINUTE), false);
+                
+                // Try cancelling with minimal intent (old pattern)
+                cancelAlarmMinimal(startRequestCode, "TURN_ON_DND");
+                cancelAlarmMinimal(endRequestCode, "TURN_OFF_DND");
+                
+                // Try cancelling backup alarms
+                cancelAlarmMinimal(startRequestCode + 10000, "TURN_ON_DND_BACKUP");
+                cancelAlarmMinimal(endRequestCode + 10000, "TURN_OFF_DND_BACKUP");
+            }
+        }
+    }
+
+    /**
+     * Cancel alarm with minimal intent (without extras) - for backwards compatibility
+     */
+    private void cancelAlarmMinimal(int requestCode, String action) {
+        Intent intent = new Intent(context, DNDReceiver.class);
+        intent.setAction(action);
+        PendingIntent pi = PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        alarmManager.cancel(pi);
+        Log.d(TAG, "Nuclear cancelled alarm: " + requestCode + " (" + action + ")");
     }
 
     private void cancelAllAlarms() {
@@ -339,6 +388,10 @@ public class DNDManager {
 
                 cancelAlarm(startRequestCode, "TURN_ON_DND");
                 cancelAlarm(endRequestCode, "TURN_OFF_DND");
+                
+                // Cancel backup alarms with correct request codes (primary + 10000)
+                cancelAlarm(startRequestCode + 10000, "TURN_ON_DND_BACKUP");
+                cancelAlarm(endRequestCode + 10000, "TURN_OFF_DND_BACKUP");
 
                 // Cancel Saturday compensation alarms if they exist
                 if (!saturdayFollows.equals("None (Holiday)")) {
@@ -350,6 +403,11 @@ public class DNDManager {
                         
                         cancelAlarm(satStartRequestCode, "TURN_ON_DND");
                         cancelAlarm(satEndRequestCode, "TURN_OFF_DND");
+                        
+                        // Cancel Saturday backup alarms with correct request codes (primary + 10000)
+                        cancelAlarm(satStartRequestCode + 10000, "TURN_ON_DND_BACKUP");
+                        cancelAlarm(satEndRequestCode + 10000, "TURN_OFF_DND_BACKUP");
+                        
                         Log.d(TAG, "Cancelled Saturday compensation alarms for " + slot.getSubject());
                     }
                 }
@@ -358,6 +416,9 @@ public class DNDManager {
 
         // Cancel periodic check
         cancelAlarm(9999, "PERIODIC_CHECK");
+        
+        // Cancel any possible backup periodic checks
+        cancelAlarm(9999 + 10000, "PERIODIC_CHECK_BACKUP");
     }
 
     /**
@@ -408,8 +469,21 @@ public class DNDManager {
     }
 
     private void cancelAlarm(int requestCode, String action) {
+        // Create intent that exactly matches the one used for scheduling
         Intent intent = new Intent(context, DNDReceiver.class);
         intent.setAction(action);
+        
+        // Extract day, hour, minute from request code for proper matching
+        int type = requestCode % 10;
+        int minute = (requestCode / 10) % 100;
+        int hour = (requestCode / 1000) % 100;
+        int dayOfWeek = requestCode / 10000;
+        
+        // Add the same extras that were used during scheduling
+        intent.putExtra("day_of_week", dayOfWeek);
+        intent.putExtra("hour", hour);
+        intent.putExtra("minute", minute);
+        intent.putExtra("request_code", requestCode);
 
         PendingIntent pi = PendingIntent.getBroadcast(
                 context,
@@ -419,10 +493,14 @@ public class DNDManager {
         );
 
         alarmManager.cancel(pi);
-        Log.d(TAG, "Cancelled alarm with request code: " + requestCode);
+        Log.d(TAG, "Cancelled alarm with request code: " + requestCode + " (Day: " + dayOfWeek + ", Time: " + hour + ":" + minute + ", Action: " + action + ")");
     }
 
     public boolean setDndOn() {
+        if (!isDndSchedulingEnabled()) {
+            Log.d(TAG, "setDndOn() called but DND scheduling is disabled. Ignoring.");
+            return false;
+        }
         if (hasDndAccess()) {
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
             prefs.edit().putBoolean("dnd_currently_on", true).apply();
@@ -436,6 +514,10 @@ public class DNDManager {
     }
 
     public boolean setDndOff() {
+        if (!isDndSchedulingEnabled()) {
+            Log.d(TAG, "setDndOff() called but DND scheduling is disabled. Ignoring.");
+            return false;
+        }
         if (hasDndAccess()) {
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL);
             prefs.edit().putBoolean("dnd_currently_on", false).apply();
@@ -475,11 +557,8 @@ public class DNDManager {
             isRequestingDndAccess = true;
             Log.d(TAG, "Requesting DND access - first request");
             
-            // Show toast and settings screen
+            // Only show toast, let MainActivity handle opening settings to avoid duplicates
             Toast.makeText(context, "Please grant Do Not Disturb access in settings", Toast.LENGTH_LONG).show();
-            Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
             
             // Reset flag after delay to allow future requests if needed
             new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {

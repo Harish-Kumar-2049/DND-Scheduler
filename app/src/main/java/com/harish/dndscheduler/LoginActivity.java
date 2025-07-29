@@ -277,22 +277,26 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void handleLoginFailure(String responseBody) {
-        Log.d("LoginFlow", "Login failed. Response body: " + responseBody.substring(0, Math.min(500, responseBody.length())));
+        runOnUiThread(() -> {
+            btnLogin.setEnabled(true);
+            progressBar.setVisibility(View.GONE);
 
-        mainHandler.post(() -> {
-            showLoading(false);
-
-            String errorMessage = "Login failed. Please check your credentials.";
-
-            if (responseBody.toLowerCase().contains("captcha")) {
-                errorMessage = "Invalid CAPTCHA. Please try again.";
-            } else if (responseBody.toLowerCase().contains("invalid") || responseBody.toLowerCase().contains("incorrect")) {
-                errorMessage = "Invalid credentials. Please check your registration number and password.";
+            if (responseBody != null) {
+                if (responseBody.contains("Invalid Captcha") || responseBody.contains("captcha")) {
+                    Toast.makeText(this, "Invalid CAPTCHA. Please try again.", Toast.LENGTH_SHORT).show();
+                } else if (responseBody.contains("Invalid User") || responseBody.contains("invalid") ||
+                        responseBody.contains("username") || responseBody.contains("password") ||
+                        responseBody.contains("login failed") || responseBody.contains("authentication")) {
+                    Toast.makeText(this, "Incorrect username or password", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Login failed. Please check your credentials and try again.", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "Network error. Please check your connection and try again.", Toast.LENGTH_SHORT).show();
             }
 
-            // Show error message to user
-            Toast.makeText(LoginActivity.this, errorMessage, Toast.LENGTH_LONG).show();
-            fetchLoginPageAndCaptcha(); // Refresh captcha
+            // Refresh CAPTCHA on any login failure
+            fetchLoginPageAndCaptcha();
         });
     }
 

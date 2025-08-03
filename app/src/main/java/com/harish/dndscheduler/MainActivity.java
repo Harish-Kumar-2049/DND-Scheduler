@@ -75,6 +75,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Start enhanced reliability features
         initializeReliabilityFeatures();
+        
+        // Initialize and start tutorial system
+        setupTutorialSystem();
+        
+        // Check if tutorial replay was requested
+        handleTutorialReplayIntent();
     }
 
     private void initializeViews() {
@@ -698,6 +704,125 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         updateHandler.removeCallbacks(updateRunnable);
+    }
+
+    // ===================== TUTORIAL SYSTEM =====================
+    
+    private SimpleTutorialManager tutorialManager;
+    
+    /**
+     * Setup the premium interactive tutorial system
+     */
+    private void setupTutorialSystem() {
+        // Create simple tutorial manager (more reliable than TapTargetView)
+        tutorialManager = new SimpleTutorialManager(this);
+        
+        // Setup tutorial listener for analytics and callbacks
+        tutorialManager.setTutorialListener(new SimpleTutorialManager.TutorialListener() {
+            @Override
+            public void onTutorialStarted() {
+                Log.d("Tutorial", "Interactive tutorial started");
+                // Pause any auto-refresh or updates during tutorial
+                if (updateHandler != null) {
+                    updateHandler.removeCallbacks(updateRunnable);
+                }
+            }
+            
+            @Override
+            public void onTutorialCompleted() {
+                Log.d("Tutorial", "Tutorial completed successfully");
+                Toast.makeText(MainActivity.this, "🎉 Tutorial completed! You're all set!", Toast.LENGTH_LONG).show();
+                // Resume normal operations
+                resumeNormalOperations();
+            }
+            
+            @Override
+            public void onTutorialSkipped() {
+                Log.d("Tutorial", "Tutorial was skipped");
+                Toast.makeText(MainActivity.this, "Tutorial skipped. The app is ready to use!", Toast.LENGTH_SHORT).show();
+                // Resume normal operations
+                resumeNormalOperations();
+            }
+            
+            @Override
+            public void onStepCompleted(int stepIndex, String stepId) {
+                Log.d("Tutorial", "Step completed: " + stepId + " (index: " + stepIndex + ")");
+            }
+        });
+        
+        // Configure tutorial steps for this activity
+        try {
+            SimpleTutorialConfig.setupMainActivityTutorial(this, tutorialManager);
+            
+            // Start tutorial if it's the first time
+            // Add a delay to ensure all views are properly initialized
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    // Check if this is truly the first time
+                    if (tutorialManager.shouldShowTutorial()) {
+                        Log.d("Tutorial", "First time user - starting tutorial system");
+                        Toast.makeText(MainActivity.this, "Welcome! Starting interactive tutorial", Toast.LENGTH_LONG).show();
+                        tutorialManager.startTutorial();
+                    } else {
+                        Log.d("Tutorial", "Tutorial already completed or skipped - not showing");
+                    }
+                } catch (Exception e) {
+                    Log.e("Tutorial", "Error starting tutorial", e);
+                }
+            }, 1000); // Increased delay to 1000ms for better reliability
+        } catch (Exception e) {
+            Log.e("Tutorial", "Error setting up tutorial", e);
+        }
+    }
+    
+    /**
+     * Resume normal app operations after tutorial
+     */
+    private void resumeNormalOperations() {
+        if (updateHandler != null && updateRunnable != null) {
+            updateHandler.post(updateRunnable);
+        }
+    }
+    
+    /**
+     * Public method to replay tutorial (can be called from settings)
+     */
+    public void replayTutorial() {
+        if (tutorialManager != null) {
+            tutorialManager.forceStartTutorial();
+        }
+    }
+    
+    /**
+     * Show contextual help for a specific UI element
+     */
+    public void showContextualHelp(String title, String description) {
+        SimpleTutorialConfig.showQuickHelp(this, title, description);
+    }
+    
+    /**
+     * Reset tutorial status (for testing or user preference)
+     */
+    public void resetTutorialStatus() {
+        if (tutorialManager != null) {
+            tutorialManager.resetTutorial();
+            Toast.makeText(this, "Tutorial status reset. It will show on next app launch.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Handle tutorial replay intent from settings
+     */
+    private void handleTutorialReplayIntent() {
+        Intent intent = getIntent();
+        if (intent != null && intent.getBooleanExtra("replay_tutorial", false)) {
+            // Add a longer delay to ensure UI is fully loaded
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (tutorialManager != null) {
+                    tutorialManager.forceStartTutorial();
+                }
+            }, 1000);
+        }
     }
 
     @Override

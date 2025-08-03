@@ -52,4 +52,7 @@ dependencies {
     
     // SwipeRefreshLayout for pull-to-refresh functionality
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    
+    // TapTargetView for interactive tutorials - using stable version
+    implementation 'com.getkeepsafe.taptargetview:taptargetview:1.13.2'
 }

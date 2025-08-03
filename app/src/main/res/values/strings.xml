@@ -1,3 +1,35 @@
 <resources>
     <string name="app_name">DNDScheduler</string>
+    
+    <!-- Tutorial Strings -->
+    <string name="tutorial_welcome_title">Welcome to DND Scheduler! 🎉</string>
+    <string name="tutorial_welcome_desc">This shows your current DND service status. Let\'s take a quick tour of the app!</string>
+    
+    <string name="tutorial_dnd_toggle_title">DND Control Center 🔕</string>
+    <string name="tutorial_dnd_toggle_desc">Tap here to manually enable or disable Do Not Disturb mode anytime you need it.</string>
+    
+    <string name="tutorial_saturday_title">Saturday Schedule 📅</string>
+    <string name="tutorial_saturday_desc">Choose your Saturday class schedule here. The app will automatically manage DND during your selected time slots.</string>
+    
+    <string name="tutorial_classes_title">Today\'s Schedule 📚</string>
+    <string name="tutorial_classes_desc">Here you\'ll see all your classes for today. DND will activate automatically during these time slots.</string>
+    
+    <string name="tutorial_refresh_title">Pull to Refresh 🔄</string>
+    <string name="tutorial_refresh_desc">Pull down to refresh your schedule and sync the latest class timings from the server.</string>
+    
+    <string name="tutorial_final_title">You\'re All Set! ✨</string>
+    <string name="tutorial_final_desc">The app will now automatically manage your Do Not Disturb settings during class hours. You can replay this tutorial anytime from settings.</string>
+    
+    <string name="tutorial_completed_message">🎉 Tutorial completed! You\'re all set!</string>
+    <string name="tutorial_skipped_message">Tutorial skipped. You can replay it anytime from settings.</string>
+    
+    <!-- Tutorial Settings -->
+    <string name="settings_tutorial_section">Tutorial &amp; Help</string>
+    <string name="settings_replay_tutorial">🎯 Replay Interactive Tutorial</string>
+    <string name="settings_replay_tutorial_desc">Experience the guided tour again with all app features</string>
+    <string name="settings_reset_tutorial">🔄 Reset Tutorial Status</string>
+    <string name="settings_reset_tutorial_desc">Clear tutorial completion status</string>
+    <string name="settings_quick_help">💡 Quick Help</string>
+    <string name="settings_quick_help_desc">Show contextual help for main screen</string>
+    
 </resources>

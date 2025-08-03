@@ -18,5 +18,18 @@
     <color name="main_background">#F8F9FA</color>
     <color name="card_background">#FFFFFF</color>
     <color name="class_item_background">#E3F2FD</color>
+    
+    <!-- Tutorial Colors -->
+    <color name="tutorial_primary">#6366F1</color>
+    <color name="tutorial_secondary">#F8FAFC</color>
+    <color name="tutorial_overlay_background">#88000000</color>
+    <color name="tutorial_content_bg">#FFFFFF</color>
+    <color name="tutorial_border">#E2E8F0</color>
+    <color name="tutorial_text_primary">#1E293B</color>
+    <color name="tutorial_text_secondary">#64748B</color>
+    <color name="tutorial_button_primary_text">#FFFFFF</color>
+    <color name="tutorial_button_secondary">#64748B</color>
+    <color name="tutorial_button_ripple">#4F46E5</color>
+    <color name="tutorial_button_ripple_secondary">#CBD5E1</color>
     <color name="class_item_border">#BBDEFB</color>
 </resources>

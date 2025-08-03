@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tutorial Overlay Layout for Premium Effects -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tutorial_overlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tutorial_overlay_background"
+    android:visibility="gone"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Blur Background Effect -->
+    <View
+        android:id="@+id/blur_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/tutorial_blur_background" />
+
+    <!-- Tutorial Content Container -->
+    <LinearLayout
+        android:id="@+id/tutorial_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:background="@drawable/tutorial_content_background"
+        android:layout_margin="16dp"
+        android:elevation="8dp">
+
+        <!-- Tutorial Title -->
+        <TextView
+            android:id="@+id/tutorial_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Tutorial Step"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/tutorial_text_primary"
+            android:layout_marginBottom="8dp"
+            android:gravity="center" />
+
+        <!-- Tutorial Description -->
+        <TextView
+            android:id="@+id/tutorial_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Description of the current tutorial step"
+            android:textSize="16sp"
+            android:textColor="@color/tutorial_text_secondary"
+            android:layout_marginBottom="16dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp" />
+
+        <!-- Progress Indicator -->
+        <LinearLayout
+            android:id="@+id/progress_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="16dp">
+
+            <TextView
+                android:id="@+id/step_counter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Step 1 of 5"
+                android:textSize="14sp"
+                android:textColor="@color/tutorial_text_secondary" />
+
+        </LinearLayout>
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <!-- Skip Button -->
+            <TextView
+                android:id="@+id/btn_skip_tutorial"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Skip"
+                android:textSize="16sp"
+                android:textColor="@color/tutorial_button_secondary"
+                android:background="@drawable/tutorial_button_secondary"
+                android:padding="12dp"
+                android:gravity="center"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Next Button -->
+            <TextView
+                android:id="@+id/btn_next_tutorial"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Next"
+                android:textSize="16sp"
+                android:textColor="@color/tutorial_button_primary_text"
+                android:background="@drawable/tutorial_button_primary"
+                android:padding="12dp"
+                android:gravity="center"
+                android:layout_marginStart="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Spotlight Circle (for highlighting specific elements) -->
+    <View
+        android:id="@+id/spotlight_circle"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:background="@drawable/tutorial_spotlight_circle"
+        android:visibility="gone"
+        android:elevation="10dp" />
+
+</FrameLayout>

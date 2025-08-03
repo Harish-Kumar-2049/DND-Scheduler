@@ -48,6 +48,11 @@ public class LoginActivity extends AppCompatActivity {
 
         initializeViews();
         setupHttpClient();
+        
+        // Setup tutorial BEFORE doing anything else - this will disable form if needed
+        setupLoginTutorial();
+        
+        // Only fetch captcha after tutorial setup (form might be disabled)
         fetchLoginPageAndCaptcha();
     }
 
@@ -70,6 +75,91 @@ public class LoginActivity extends AppCompatActivity {
                 performLogin();
             }
         });
+    }
+
+    private void setupLoginTutorial() {
+        SimpleTutorialManager tutorialManager = new SimpleTutorialManager(this);
+        
+        // Set to simple slide mode (no spotlight) for login and unique keys
+        tutorialManager.setSpotlightMode(false)
+                      .setTutorialKeys("login_activity");
+        
+        // Set up tutorial listener
+        tutorialManager.setTutorialListener(new SimpleTutorialManager.TutorialListener() {
+            @Override
+            public void onTutorialStarted() {
+                Log.d("LoginTutorial", "Login tutorial started");
+                // Disable user interaction during tutorial
+                disableLoginForm();
+            }
+
+            @Override
+            public void onTutorialCompleted() {
+                Log.d("LoginTutorial", "Login tutorial completed");
+                // Re-enable user interaction after tutorial
+                enableLoginForm();
+            }
+
+            @Override
+            public void onTutorialSkipped() {
+                Log.d("LoginTutorial", "Login tutorial skipped");
+                // Re-enable user interaction after tutorial
+                enableLoginForm();
+            }
+
+            @Override
+            public void onStepCompleted(int stepIndex, String stepId) {
+                Log.d("LoginTutorial", "Completed step: " + stepId);
+            }
+        });
+
+        // Configure tutorial steps using LoginTutorialConfig
+        LoginTutorialConfig.setupLoginTutorial(this, tutorialManager);
+        
+        // Start tutorial immediately if it should be shown
+        if (tutorialManager.shouldShowTutorial()) {
+            // Start tutorial immediately without delay
+            tutorialManager.startTutorial();
+        } else {
+            // If tutorial doesn't need to be shown, make sure form is enabled
+            enableLoginForm();
+        }
+    }
+
+    private void disableLoginForm() {
+        // Disable all input fields and buttons during tutorial
+        etRegister.setEnabled(false);
+        etPassword.setEnabled(false);
+        etCaptcha.setEnabled(false);
+        btnLogin.setEnabled(false);
+        btnRefreshCaptcha.setEnabled(false);
+        
+        // Make them look disabled
+        etRegister.setAlpha(0.5f);
+        etPassword.setAlpha(0.5f);
+        etCaptcha.setAlpha(0.5f);
+        btnLogin.setAlpha(0.5f);
+        btnRefreshCaptcha.setAlpha(0.5f);
+        
+        Log.d("LoginTutorial", "Login form disabled during tutorial");
+    }
+
+    private void enableLoginForm() {
+        // Re-enable all input fields and buttons after tutorial
+        etRegister.setEnabled(true);
+        etPassword.setEnabled(true);
+        etCaptcha.setEnabled(true);
+        btnLogin.setEnabled(true);
+        btnRefreshCaptcha.setEnabled(true);
+        
+        // Restore normal appearance
+        etRegister.setAlpha(1.0f);
+        etPassword.setAlpha(1.0f);
+        etCaptcha.setAlpha(1.0f);
+        btnLogin.setAlpha(1.0f);
+        btnRefreshCaptcha.setAlpha(1.0f);
+        
+        Log.d("LoginTutorial", "Login form enabled after tutorial");
     }
 
     private void setupHttpClient() {

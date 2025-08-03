@@ -36,6 +36,8 @@ public class SimpleTutorialManager {
     private static final String PREFS_NAME = "tutorial_prefs";
     private static final String TUTORIAL_COMPLETED_KEY = "main_tutorial_completed";
     private static final String TUTORIAL_SKIPPED_KEY = "tutorial_skipped";
+    private String tutorialCompletedKey = TUTORIAL_COMPLETED_KEY;
+    private String tutorialSkippedKey = TUTORIAL_SKIPPED_KEY;
     
     private Activity activity;
     private SharedPreferences prefs;
@@ -45,6 +47,7 @@ public class SimpleTutorialManager {
     private FrameLayout tutorialOverlay;
     private TutorialListener tutorialListener;
     private HashMap<View, Drawable> originalBackgrounds; // Store original backgrounds for restoration
+    private boolean useSpotlightMode = true; // Default to spotlight mode
     
     public interface TutorialListener {
         void onTutorialStarted();
@@ -91,10 +94,31 @@ public class SimpleTutorialManager {
         return addStep(new TutorialStep(id, targetView, title, description));
     }
     
+    // Set tutorial mode - true for spotlight (main activity), false for simple slides (login)
+    public SimpleTutorialManager setSpotlightMode(boolean useSpotlight) {
+        this.useSpotlightMode = useSpotlight;
+        return this;
+    }
+    
+    // Set unique keys for different tutorial types (login vs main)
+    public SimpleTutorialManager setTutorialKeys(String activityName) {
+        Log.d("SimpleTutorialManager", "Setting tutorial keys for activity: " + activityName);
+        this.tutorialCompletedKey = activityName + "_tutorial_completed";
+        this.tutorialSkippedKey = activityName + "_tutorial_skipped";
+        Log.d("SimpleTutorialManager", "  - completedKey: " + tutorialCompletedKey);
+        Log.d("SimpleTutorialManager", "  - skippedKey: " + tutorialSkippedKey);
+        return this;
+    }
+    
     public boolean shouldShowTutorial() {
-        boolean completed = prefs.getBoolean(TUTORIAL_COMPLETED_KEY, false);
-        boolean skipped = prefs.getBoolean(TUTORIAL_SKIPPED_KEY, false);
-        Log.d("SimpleTutorialManager", "Should show tutorial? Completed: " + completed + ", Skipped: " + skipped);
+        boolean completed = prefs.getBoolean(tutorialCompletedKey, false);
+        boolean skipped = prefs.getBoolean(tutorialSkippedKey, false);
+        Log.d("SimpleTutorialManager", "Should show tutorial check:");
+        Log.d("SimpleTutorialManager", "  - tutorialCompletedKey: " + tutorialCompletedKey);
+        Log.d("SimpleTutorialManager", "  - tutorialSkippedKey: " + tutorialSkippedKey);
+        Log.d("SimpleTutorialManager", "  - Completed: " + completed);
+        Log.d("SimpleTutorialManager", "  - Skipped: " + skipped);
+        Log.d("SimpleTutorialManager", "  - Result (should show): " + (!completed && !skipped));
         return !completed && !skipped;
     }
     
@@ -108,7 +132,6 @@ public class SimpleTutorialManager {
         
         if (tutorialSteps.isEmpty()) {
             Log.w("SimpleTutorialManager", "No tutorial steps available");
-            Toast.makeText(activity, "No tutorial steps configured", Toast.LENGTH_SHORT).show();
             return;
         }
         
@@ -118,7 +141,6 @@ public class SimpleTutorialManager {
         }
         
         Log.d("SimpleTutorialManager", "Starting tutorial with " + tutorialSteps.size() + " steps");
-        Toast.makeText(activity, "🎯 Starting interactive tutorial!", Toast.LENGTH_SHORT).show();
         
         isRunning = true;
         currentStepIndex = 0;
@@ -147,6 +169,16 @@ public class SimpleTutorialManager {
         // Remove existing overlay if any
         removeTutorialOverlay();
 
+        if (useSpotlightMode) {
+            // Use spotlight overlay for main activity (original behavior)
+            createSpotlightOverlay(step);
+        } else {
+            // Use simple centered slides for login
+            createSimpleSlideOverlay(step);
+        }
+    }
+    
+    private void createSpotlightOverlay(TutorialStep step) {
         // Create the spotlight overlay
         SpotlightOverlayView spotlightOverlay = new SpotlightOverlayView(activity);
         spotlightOverlay.setLayoutParams(new FrameLayout.LayoutParams(
@@ -179,8 +211,39 @@ public class SimpleTutorialManager {
             location[1] + step.targetView.getHeight());
         createTooltipPopup(step, targetRect);
 
-        // Set overlay elevation lower than highlighted components
-        tutorialOverlay.setElevation(10f); // Tutorial cards and overlay
+        // Set overlay elevation
+        tutorialOverlay.setElevation(10f);
+    }
+    
+    private void createSimpleSlideOverlay(TutorialStep step) {
+        // Create simple dim overlay without spotlight for welcome slides
+        tutorialOverlay = new FrameLayout(activity);
+        tutorialOverlay.setLayoutParams(new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        tutorialOverlay.setClickable(false);
+        tutorialOverlay.setFocusable(false);
+
+        // Simple dim background
+        View dimBackground = new View(activity);
+        dimBackground.setLayoutParams(new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        dimBackground.setBackgroundColor(Color.parseColor("#BB000000")); // Semi-transparent black
+        dimBackground.setClickable(false);
+        tutorialOverlay.addView(dimBackground);
+
+        // Add overlay to activity
+        ViewGroup rootView = activity.findViewById(android.R.id.content);
+        rootView.addView(tutorialOverlay);
+
+        // Create centered tooltip popup for welcome slides
+        createWelcomeTooltipPopup(step);
+
+        // Set overlay elevation
+        tutorialOverlay.setElevation(10f);
     }
     
     private void bringComponentAboveOverlay(View targetView) {
@@ -228,6 +291,105 @@ public class SimpleTutorialManager {
         }
         originalBackgrounds.put(targetView, targetView.getBackground());
         Log.d("SimpleTutorialManager", "Saved original background for component");
+    }
+    
+    private void createWelcomeTooltipPopup(TutorialStep step) {
+        // Create tooltip container
+        LinearLayout tooltipContainer = new LinearLayout(activity);
+        tooltipContainer.setOrientation(LinearLayout.VERTICAL);
+        tooltipContainer.setPadding(32, 24, 32, 24);
+        
+        // Style tooltip with app theme
+        GradientDrawable tooltipBg = new GradientDrawable();
+        tooltipBg.setShape(GradientDrawable.RECTANGLE);
+        tooltipBg.setColor(Color.parseColor("#5E35B1")); // App primary color
+        tooltipBg.setCornerRadius(20f);
+        tooltipBg.setStroke(2, Color.parseColor("#4A148C"));
+        tooltipContainer.setBackground(tooltipBg);
+        tooltipContainer.setElevation(12f);
+        
+        // Step counter
+        TextView stepCounter = new TextView(activity);
+        stepCounter.setText("Step " + (currentStepIndex + 1) + " of " + tutorialSteps.size());
+        stepCounter.setTextSize(13);
+        stepCounter.setTextColor(Color.parseColor("#E1BEE7")); // Light purple
+        stepCounter.setGravity(Gravity.CENTER);
+        stepCounter.setPadding(0, 0, 0, 12);
+        tooltipContainer.addView(stepCounter);
+        
+        // Title with emoji
+        TextView titleView = new TextView(activity);
+        titleView.setText(step.title);
+        titleView.setTextSize(22);
+        titleView.setTextColor(Color.WHITE);
+        titleView.setGravity(Gravity.CENTER);
+        titleView.setPadding(0, 0, 0, 16);
+        titleView.setTypeface(null, android.graphics.Typeface.BOLD);
+        tooltipContainer.addView(titleView);
+        
+        // Description
+        TextView descriptionView = new TextView(activity);
+        descriptionView.setText(step.description);
+        descriptionView.setTextSize(16);
+        descriptionView.setTextColor(Color.parseColor("#F3E5F5")); // Very light purple
+        descriptionView.setGravity(Gravity.CENTER);
+        descriptionView.setPadding(0, 0, 0, 20);
+        descriptionView.setLineSpacing(6f, 1.3f);
+        tooltipContainer.addView(descriptionView);
+        
+        // Buttons layout
+        LinearLayout buttonsLayout = new LinearLayout(activity);
+        buttonsLayout.setOrientation(LinearLayout.HORIZONTAL);
+        buttonsLayout.setGravity(Gravity.CENTER);
+        
+        // Skip button
+        Button skipButton = new Button(activity);
+        skipButton.setText("Skip");
+        skipButton.setTextColor(Color.parseColor("#E1BEE7"));
+        skipButton.setTextSize(15);
+        skipButton.setBackgroundColor(Color.TRANSPARENT);
+        skipButton.setPadding(20, 10, 20, 10);
+        skipButton.setOnClickListener(v -> skipTutorial());
+        
+        // Next button
+        Button nextButton = new Button(activity);
+        nextButton.setText(currentStepIndex == tutorialSteps.size() - 1 ? "Get Started ✨" : "Next →");
+        nextButton.setTextColor(Color.parseColor("#5E35B1"));
+        nextButton.setTextSize(15);
+        nextButton.setTypeface(null, android.graphics.Typeface.BOLD);
+        
+        GradientDrawable nextBg = new GradientDrawable();
+        nextBg.setShape(GradientDrawable.RECTANGLE);
+        nextBg.setColor(Color.WHITE);
+        nextBg.setCornerRadius(10f);
+        nextButton.setBackground(nextBg);
+        nextButton.setPadding(24, 10, 24, 10);
+        nextButton.setOnClickListener(v -> nextStep());
+        
+        buttonsLayout.addView(skipButton);
+        buttonsLayout.addView(nextButton);
+        tooltipContainer.addView(buttonsLayout);
+        
+        // Center the tooltip on screen
+        FrameLayout.LayoutParams tooltipParams = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        tooltipParams.gravity = Gravity.CENTER;
+        tooltipParams.setMargins(40, 40, 40, 40);
+        
+        tutorialOverlay.addView(tooltipContainer, tooltipParams);
+        
+        // Animate tooltip appearance
+        tooltipContainer.setAlpha(0f);
+        tooltipContainer.setScaleX(0.8f);
+        tooltipContainer.setScaleY(0.8f);
+        tooltipContainer.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(400)
+            .start();
     }
     
     private void createTooltipPopup(TutorialStep step, Rect targetRect) {
@@ -366,7 +528,7 @@ public class SimpleTutorialManager {
     
     private void skipTutorial() {
         Log.d("SimpleTutorialManager", "Tutorial skipped by user");
-        prefs.edit().putBoolean(TUTORIAL_SKIPPED_KEY, true).apply();
+        prefs.edit().putBoolean(tutorialSkippedKey, true).apply();
         removeTutorialOverlay();
         isRunning = false;
         
@@ -377,7 +539,7 @@ public class SimpleTutorialManager {
     
     private void completeTutorial() {
         Log.d("SimpleTutorialManager", "Tutorial completed");
-        prefs.edit().putBoolean(TUTORIAL_COMPLETED_KEY, true).apply();
+        prefs.edit().putBoolean(tutorialCompletedKey, true).apply();
         removeTutorialOverlay();
         isRunning = false;
         
@@ -447,17 +609,17 @@ public class SimpleTutorialManager {
     
     public void resetTutorial() {
         prefs.edit()
-            .putBoolean(TUTORIAL_COMPLETED_KEY, false)
-            .putBoolean(TUTORIAL_SKIPPED_KEY, false)
+            .putBoolean(tutorialCompletedKey, false)
+            .putBoolean(tutorialSkippedKey, false)
             .apply();
         Log.d("SimpleTutorialManager", "Tutorial status reset");
     }
     
     public boolean isTutorialCompleted() {
-        return prefs.getBoolean(TUTORIAL_COMPLETED_KEY, false);
+        return prefs.getBoolean(tutorialCompletedKey, false);
     }
     
     public boolean isTutorialSkipped() {
-        return prefs.getBoolean(TUTORIAL_SKIPPED_KEY, false);
+        return prefs.getBoolean(tutorialSkippedKey, false);
     }
 }

@@ -19,7 +19,7 @@ public class SimpleTutorialConfig {
                 "welcome",
                 serviceStatusView,
                 "Welcome to DND Scheduler! 🎉",
-                "This shows your current Do Not Disturb service status. Let's explore all the features!"
+                "Shows the current status of the Do Not Disturb. Let's explore all the features!"
             );
         }
         
@@ -30,7 +30,7 @@ public class SimpleTutorialConfig {
                 "toggle_dnd",
                 toggleButton,
                 "DND Control Center 🔕",
-                "Tap this button to manually enable or disable automatic DND scheduling anytime!"
+                "This is the main toggle button for enabling or disabling the automatic DND scheduling feature."
             );
         }
         
@@ -40,8 +40,8 @@ public class SimpleTutorialConfig {
             tutorialManager.addStep(
                 "saturday_schedule",
                 saturdayLayout,
-                "Saturday Schedule 📅",
-                "Configure your Saturday classes here. The app will auto-manage DND during selected times."
+                "Saturday Schedule ",
+                "Configure your Saturday classes here. Make the app automatically shedule DND for Saturday according to your alloted day time table"
             );
         }
         

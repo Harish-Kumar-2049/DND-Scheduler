@@ -714,8 +714,16 @@ public class MainActivity extends AppCompatActivity {
      * Setup the premium interactive tutorial system
      */
     private void setupTutorialSystem() {
+        Log.d("Tutorial", "Setting up tutorial system for MainActivity");
+        
         // Create simple tutorial manager (more reliable than TapTargetView)
         tutorialManager = new SimpleTutorialManager(this);
+        
+        // Enable spotlight mode for main activity and set unique keys
+        tutorialManager.setSpotlightMode(true)
+                      .setTutorialKeys("main_activity");
+        
+        Log.d("Tutorial", "Tutorial manager configured with spotlight mode and main_activity keys");
         
         // Setup tutorial listener for analytics and callbacks
         tutorialManager.setTutorialListener(new SimpleTutorialManager.TutorialListener() {
@@ -731,7 +739,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onTutorialCompleted() {
                 Log.d("Tutorial", "Tutorial completed successfully");
-                Toast.makeText(MainActivity.this, "🎉 Tutorial completed! You're all set!", Toast.LENGTH_LONG).show();
                 // Resume normal operations
                 resumeNormalOperations();
             }
@@ -739,7 +746,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onTutorialSkipped() {
                 Log.d("Tutorial", "Tutorial was skipped");
-                Toast.makeText(MainActivity.this, "Tutorial skipped. The app is ready to use!", Toast.LENGTH_SHORT).show();
                 // Resume normal operations
                 resumeNormalOperations();
             }
@@ -752,24 +758,30 @@ public class MainActivity extends AppCompatActivity {
         
         // Configure tutorial steps for this activity
         try {
+            Log.d("Tutorial", "Setting up main activity tutorial configuration");
             SimpleTutorialConfig.setupMainActivityTutorial(this, tutorialManager);
+            Log.d("Tutorial", "Tutorial configuration completed");
             
             // Start tutorial if it's the first time
             // Add a delay to ensure all views are properly initialized
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 try {
+                    Log.d("Tutorial", "Checking if tutorial should show...");
+                    boolean shouldShow = tutorialManager.shouldShowTutorial();
+                    Log.d("Tutorial", "Should show tutorial: " + shouldShow);
+                    
                     // Check if this is truly the first time
-                    if (tutorialManager.shouldShowTutorial()) {
+                    if (shouldShow) {
                         Log.d("Tutorial", "First time user - starting tutorial system");
-                        Toast.makeText(MainActivity.this, "Welcome! Starting interactive tutorial", Toast.LENGTH_LONG).show();
                         tutorialManager.startTutorial();
                     } else {
                         Log.d("Tutorial", "Tutorial already completed or skipped - not showing");
+                        Log.d("Tutorial", "To test tutorial again, call resetTutorialForTesting()");
                     }
                 } catch (Exception e) {
                     Log.e("Tutorial", "Error starting tutorial", e);
                 }
-            }, 1000); // Increased delay to 1000ms for better reliability
+            }, 1500); // Increased delay to 1500ms for better reliability
         } catch (Exception e) {
             Log.e("Tutorial", "Error setting up tutorial", e);
         }
@@ -807,6 +819,22 @@ public class MainActivity extends AppCompatActivity {
         if (tutorialManager != null) {
             tutorialManager.resetTutorial();
             Toast.makeText(this, "Tutorial status reset. It will show on next app launch.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * For testing - reset and immediately show tutorial
+     */
+    public void resetTutorialForTesting() {
+        Log.d("Tutorial", "Resetting tutorial for testing...");
+        if (tutorialManager != null) {
+            tutorialManager.resetTutorial();
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                Log.d("Tutorial", "Starting tutorial immediately for testing");
+                tutorialManager.forceStartTutorial();
+            }, 500);
+        } else {
+            Log.e("Tutorial", "Tutorial manager is null - cannot reset for testing");
         }
     }
 

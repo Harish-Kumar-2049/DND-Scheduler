@@ -452,7 +452,7 @@ public class SimpleTutorialManager {
         
         // Next button
         Button nextButton = new Button(activity);
-        nextButton.setText(currentStepIndex == tutorialSteps.size() - 1 ? "Finish ✨" : "Next →");
+        nextButton.setText(currentStepIndex == tutorialSteps.size() - 1 ? "Finish" : "Next →");
         nextButton.setTextColor(Color.parseColor("#5E35B1"));
         nextButton.setTextSize(14);
         nextButton.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -475,6 +475,9 @@ public class SimpleTutorialManager {
             ViewGroup.LayoutParams.WRAP_CONTENT
         );
         
+        // Set minimum width for better card appearance
+        tooltipContainer.setMinimumWidth(420); // Increased even more for full text visibility
+        
         // Determine best position for tooltip
         int screenWidth = activity.getResources().getDisplayMetrics().widthPixels;
         int screenHeight = activity.getResources().getDisplayMetrics().heightPixels;
@@ -489,7 +492,7 @@ public class SimpleTutorialManager {
         }
         
         // Center horizontally, adjust if too close to edges
-        int tooltipWidth = 280; // Estimated width
+        int tooltipWidth = 420; // Increased estimated width to match minimum
         tooltipParams.leftMargin = Math.max(20, Math.min(
             targetRect.centerX() - tooltipWidth / 2,
             screenWidth - tooltipWidth - 20

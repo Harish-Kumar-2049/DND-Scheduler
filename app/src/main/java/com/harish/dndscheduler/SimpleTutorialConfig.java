@@ -40,19 +40,8 @@ public class SimpleTutorialConfig {
             tutorialManager.addStep(
                 "saturday_schedule",
                 saturdayLayout,
-                "Saturday Schedule ",
-                "Configure your Saturday classes here. Make the app automatically shedule DND for Saturday according to your alloted day time table"
-            );
-        }
-        
-        // Step 4: Today's Classes - Target the RecyclerView
-        View recyclerView = activity.findViewById(R.id.rv_today_classes);
-        if (recyclerView != null) {
-            tutorialManager.addStep(
-                "todays_classes",
-                recyclerView,
-                "Today's Schedule 📚",
-                "Your daily classes appear here. DND activates automatically during these periods!"
+                "Saturday Schedule 📅",
+                "Configure your Saturday classes here. Choose which weekday Saturday should follow."
             );
         }
     }

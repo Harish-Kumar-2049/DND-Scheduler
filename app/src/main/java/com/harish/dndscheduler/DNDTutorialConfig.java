@@ -39,33 +39,20 @@ public class DNDTutorialConfig {
             );
         }
         
-        // Step 3: Saturday Schedule Dropdown
-        View saturdayDropdown = activity.findViewById(R.id.layout_saturday_dropdown);
-        if (saturdayDropdown != null) {
+        // Step 3: Saturday Schedule Dropdown (same structure as Step 2)
+        View saturdayButton = activity.findViewById(R.id.layout_saturday_dropdown);
+        if (saturdayButton != null) {
             tutorialManager.addStep(
                 new GameTutorialManager.TutorialStep(
                     "saturday_schedule",
-                    saturdayDropdown,
+                    saturdayButton,
                     "Saturday Schedule 📅",
-                    "Choose your Saturday class schedule here. The app will automatically manage DND during your selected time slots."
+                    "Configure your Saturday classes here. Choose which weekday Saturday should follow."
                 ).setIcon(android.R.drawable.ic_menu_day)
             );
         }
         
-        // Step 4: Today's Classes List
-        View recyclerView = activity.findViewById(R.id.rv_today_classes);
-        if (recyclerView != null) {
-            tutorialManager.addStep(
-                new GameTutorialManager.TutorialStep(
-                    "todays_classes",
-                    recyclerView,
-                    "Today's Schedule 📚",
-                    "Here you'll see all your classes for today. DND will activate automatically during these time slots."
-                ).setIcon(android.R.drawable.ic_menu_today)
-            );
-        }
-        
-        // Step 5: Refresh Functionality
+        // Step 4: Refresh Functionality
         View swipeRefresh = activity.findViewById(R.id.swipe_refresh_layout);
         if (swipeRefresh != null) {
             tutorialManager.addStep(
@@ -79,7 +66,7 @@ public class DNDTutorialConfig {
             );
         }
         
-        // Step 6: Final Tips - Use the main content view as fallback
+        // Step 5: Final Tips - Use the main content view as fallback
         View finalView = activity.findViewById(android.R.id.content);
         if (finalView != null) {
             tutorialManager.addStep(

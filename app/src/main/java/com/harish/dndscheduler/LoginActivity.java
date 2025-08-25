@@ -19,6 +19,7 @@ import java.net.CookiePolicy;
 import java.net.HttpCookie;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.*;
 
 import okhttp3.*;
@@ -359,9 +360,9 @@ public class LoginActivity extends AppCompatActivity {
                 && response.header("Location").contains("home.jsp");
 
         // Check for failure indicators
-        boolean hasError = body.toLowerCase().contains("invalid") ||
-                body.toLowerCase().contains("error") ||
-                body.toLowerCase().contains("incorrect");
+        boolean hasError = body.toLowerCase(Locale.ROOT).contains("invalid") ||
+                body.toLowerCase(Locale.ROOT).contains("error") ||
+                body.toLowerCase(Locale.ROOT).contains("incorrect");
 
         return (hasHomeJsp || hasSuccessIndicator || isRedirectToHome) && !hasError;
     }
@@ -372,15 +373,8 @@ public class LoginActivity extends AppCompatActivity {
             progressBar.setVisibility(View.GONE);
 
             if (responseBody != null) {
-                if (responseBody.contains("Invalid Captcha") || responseBody.contains("captcha")) {
-                    Toast.makeText(this, "Invalid CAPTCHA. Please try again.", Toast.LENGTH_SHORT).show();
-                } else if (responseBody.contains("Invalid User") || responseBody.contains("invalid") ||
-                        responseBody.contains("username") || responseBody.contains("password") ||
-                        responseBody.contains("login failed") || responseBody.contains("authentication")) {
-                    Toast.makeText(this, "Incorrect username or password", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "Login failed. Please check your credentials and try again.", Toast.LENGTH_SHORT).show();
-                }
+                // Show same error message for all login failures (captcha, password, etc.)
+                Toast.makeText(this, "Invalid username or password", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "Network error. Please check your connection and try again.", Toast.LENGTH_SHORT).show();
             }
@@ -463,15 +457,15 @@ public class LoginActivity extends AppCompatActivity {
         }
 
         // Check for common timetable indicators
-        boolean hasTable = timetableHtml.toLowerCase().contains("<table") ||
-                timetableHtml.toLowerCase().contains("timetable");
+        boolean hasTable = timetableHtml.toLowerCase(Locale.ROOT).contains("<table") ||
+                timetableHtml.toLowerCase(Locale.ROOT).contains("timetable");
 
         boolean hasTimeFormat = timetableHtml.matches(".*\\d{1,2}:\\d{2}.*") || // HH:MM format
                 timetableHtml.matches(".*\\d{1,2}\\s*[AP]M.*"); // AM/PM format
 
-        boolean hasClassInfo = timetableHtml.toLowerCase().contains("class") ||
-                timetableHtml.toLowerCase().contains("subject") ||
-                timetableHtml.toLowerCase().contains("period");
+        boolean hasClassInfo = timetableHtml.toLowerCase(Locale.ROOT).contains("class") ||
+                timetableHtml.toLowerCase(Locale.ROOT).contains("subject") ||
+                timetableHtml.toLowerCase(Locale.ROOT).contains("period");
 
         Log.d("TimetableValidation", "Has table: " + hasTable);
         Log.d("TimetableValidation", "Has time format: " + hasTimeFormat);

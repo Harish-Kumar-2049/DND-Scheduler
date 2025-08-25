@@ -446,7 +446,7 @@ public class MainActivity extends AppCompatActivity {
             Calendar endCal = Calendar.getInstance();
             endCal.setTimeInMillis(slot.getEndMillis());
             
-            String timeRange = String.format("%02d:%02d-%02d:%02d",
+            String timeRange = String.format(Locale.ROOT, "%02d:%02d-%02d:%02d",
                 startCal.get(Calendar.HOUR_OF_DAY), startCal.get(Calendar.MINUTE),
                 endCal.get(Calendar.HOUR_OF_DAY), endCal.get(Calendar.MINUTE));
             String dayName = getDayNameFromCalendar(startCal.get(Calendar.DAY_OF_WEEK));

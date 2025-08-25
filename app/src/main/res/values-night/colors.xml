@@ -2,7 +2,7 @@
 <resources>
     <color name="login_background">#121212</color>
     <color name="login_card_background">#1F1F1F</color>
-    <color name="button_color">#7C4DFF</color>
+    <color name="button_color">#5E35B1</color>
     <color name="text_color">#F5F5F5</color>
     <color name="hint_color">#BDBDBD</color>
     <color name="primary">#7C4DFF</color>
@@ -13,4 +13,11 @@
     <color name="card_background">#1F1F1F</color>
     <color name="class_item_background">#2D2D2D</color>
     <color name="class_item_border">#5E35B1</color>
+    
+    <!-- Tutorial Colors for Dark Mode -->
+    <color name="tutorial_primary">#6366F1</color>
+    <color name="tutorial_content_bg">#FFFFFF</color>
+    <color name="tutorial_overlay_background">#AA000000</color>
+    <color name="tutorial_description_text">#E0E0E0</color>
+    <color name="tutorial_button_primary_text">#FFFFFF</color>
 </resources>

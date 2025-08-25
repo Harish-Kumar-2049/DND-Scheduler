@@ -28,6 +28,7 @@
     <color name="tutorial_text_primary">#1E293B</color>
     <color name="tutorial_text_secondary">#64748B</color>
     <color name="tutorial_button_primary_text">#FFFFFF</color>
+    <color name="tutorial_description_text">#E0E0E0</color>
     <color name="tutorial_button_secondary">#64748B</color>
     <color name="tutorial_button_ripple">#4F46E5</color>
     <color name="tutorial_button_ripple_secondary">#CBD5E1</color>

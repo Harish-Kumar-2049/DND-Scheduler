@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioManager;
 import android.os.Build;
 import android.provider.Settings;
 import android.util.Log;
@@ -20,6 +21,7 @@ public class DNDManager {
     private final Context context;
     private final AlarmManager alarmManager;
     private final NotificationManager notificationManager;
+    private final AudioManager audioManager;
     private final SharedPreferences prefs;
     private static final String TAG = "DNDManager";
     private boolean isRequestingDndAccess = false; 
@@ -28,6 +30,7 @@ public class DNDManager {
         this.context = context.getApplicationContext(); // Use app context to prevent leaks
         this.alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         this.notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        this.audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         this.prefs = context.getSharedPreferences("dnd_prefs", Context.MODE_PRIVATE);
     }
 
@@ -496,11 +499,129 @@ public class DNDManager {
         Log.d(TAG, "Cancelled alarm with request code: " + requestCode + " (Day: " + dayOfWeek + ", Time: " + hour + ":" + minute + ", Action: " + action + ")");
     }
 
-    public boolean setDndOn() {
+    public boolean setSilentModeOn() {
         if (!isDndSchedulingEnabled()) {
-            Log.d(TAG, "setDndOn() called but DND scheduling is disabled. Ignoring.");
+            Log.d(TAG, "setSilentModeOn() called but scheduling is disabled. Ignoring.");
             return false;
         }
+        
+        String silentModeType = getSilentModeType();
+        
+        if ("vibrate".equals(silentModeType)) {
+            return setVibrateMode();
+        } else if ("silent".equals(silentModeType)) {
+            return setSilentMode();
+        } else {
+            return setDndMode();
+        }
+    }
+
+    public boolean setSilentModeOff() {
+        if (!isDndSchedulingEnabled()) {
+            Log.d(TAG, "setSilentModeOff() called but scheduling is disabled. Ignoring.");
+            return false;
+        }
+        
+        String silentModeType = getSilentModeType();
+        
+        if ("vibrate".equals(silentModeType) || "silent".equals(silentModeType)) {
+            return restoreNormalMode();
+        } else {
+            return setDndOff();
+        }
+    }
+
+    private boolean setVibrateMode() {
+        Log.d(TAG, "=== SETTING VIBRATE MODE ===");
+        Log.d(TAG, "Current ringer mode: " + audioManager.getRingerMode());
+        
+        // Store current ringer mode to restore later (only if not already stored)
+        if (!prefs.getBoolean("ringer_mode_stored", false)) {
+            int currentRingerMode = audioManager.getRingerMode();
+            prefs.edit()
+                    .putInt("original_ringer_mode", currentRingerMode)
+                    .putBoolean("ringer_mode_stored", true)
+                    .apply();
+            Log.d(TAG, "Stored original ringer mode: " + currentRingerMode);
+        } else {
+            Log.d(TAG, "Original ringer mode already stored: " + prefs.getInt("original_ringer_mode", -1));
+        }
+        
+        // Set to vibrate mode
+        try {
+            audioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+            Log.d(TAG, "Successfully set to VIBRATE mode");
+            Log.d(TAG, "New ringer mode: " + audioManager.getRingerMode());
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set vibrate mode: " + e.getMessage());
+            return false;
+        }
+        prefs.edit().putBoolean("dnd_currently_on", true).apply();
+        prefs.edit().putBoolean("dnd_set_by_app", true).apply();
+        Log.d(TAG, "Vibrate mode turned ON");
+        return true;
+    }
+
+    private boolean setSilentMode() {
+        Log.d(TAG, "=== SETTING SILENT MODE ===");
+        Log.d(TAG, "Current ringer mode: " + audioManager.getRingerMode());
+        
+        // Store current ringer mode to restore later (only if not already stored)
+        if (!prefs.getBoolean("ringer_mode_stored", false)) {
+            int currentRingerMode = audioManager.getRingerMode();
+            prefs.edit()
+                    .putInt("original_ringer_mode", currentRingerMode)
+                    .putBoolean("ringer_mode_stored", true)
+                    .apply();
+            Log.d(TAG, "Stored original ringer mode: " + currentRingerMode);
+        } else {
+            Log.d(TAG, "Original ringer mode already stored: " + prefs.getInt("original_ringer_mode", -1));
+        }
+        
+        // Set to silent mode
+        try {
+            audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
+            Log.d(TAG, "Successfully set to SILENT mode");
+            Log.d(TAG, "New ringer mode: " + audioManager.getRingerMode());
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to set silent mode: " + e.getMessage());
+            return false;
+        }
+        prefs.edit().putBoolean("dnd_currently_on", true).apply();
+        prefs.edit().putBoolean("dnd_set_by_app", true).apply();
+        Log.d(TAG, "Silent mode turned ON");
+        return true;
+    }
+
+    private boolean restoreNormalMode() {
+        Log.d(TAG, "=== RESTORING NORMAL MODE ===");
+        Log.d(TAG, "Current ringer mode: " + audioManager.getRingerMode());
+        
+        // Restore original ringer mode
+        int originalRingerMode = prefs.getInt("original_ringer_mode", AudioManager.RINGER_MODE_NORMAL);
+        Log.d(TAG, "Restoring to original ringer mode: " + originalRingerMode);
+        
+        try {
+            audioManager.setRingerMode(originalRingerMode);
+            Log.d(TAG, "Successfully restored to original mode");
+            Log.d(TAG, "New ringer mode: " + audioManager.getRingerMode());
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to restore ringer mode: " + e.getMessage());
+            return false;
+        }
+        
+        // Clear the storage flag so next activation can store the current mode again
+        prefs.edit()
+                .putBoolean("dnd_currently_on", false)
+                .putBoolean("dnd_set_by_app", false)
+                .putBoolean("ringer_mode_stored", false)
+                .apply();
+        
+        Log.d(TAG, "Cleared storage flags");
+        return true;
+    }
+
+    private boolean setDndMode() {
         if (hasDndAccess()) {
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
             prefs.edit().putBoolean("dnd_currently_on", true).apply();
@@ -511,6 +632,11 @@ public class DNDManager {
             requestDndAccessSafely();
             return false;
         }
+    }
+
+    // Keep the old methods for backward compatibility
+    public boolean setDndOn() {
+        return setSilentModeOn();
     }
 
     public boolean setDndOff() {
@@ -540,6 +666,19 @@ public class DNDManager {
 
     public boolean isDndSchedulingEnabled() {
         return prefs.getBoolean("dnd_scheduling_enabled", false);
+    }
+
+    public String getSilentModeType() {
+        return prefs.getString("silent_mode_type", "vibrate"); // Default to Vibrate mode (options: "dnd", "vibrate", "silent")
+    }
+
+    public void setSilentModeType(String modeType) {
+        prefs.edit().putString("silent_mode_type", modeType).apply();
+        Log.d(TAG, "Silent mode type set to: " + modeType);
+    }
+
+    public boolean isVibrateMode() {
+        return "vibrate".equals(getSilentModeType());
     }
 
     public boolean hasDndAccess() {

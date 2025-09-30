@@ -24,7 +24,7 @@ public class SimpleTutorialConfig {
         }
         
         // Step 2: DND Toggle Button - Target the actual clickable button container
-        View toggleButton = activity.findViewById(R.id.btn_toggle_dnd);
+        View toggleButton = activity.findViewById(R.id.btn_dnd_menu);
         if (toggleButton != null) {
             tutorialManager.addStep(
                 "toggle_dnd",

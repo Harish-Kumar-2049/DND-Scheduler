@@ -27,7 +27,7 @@ public class DNDTutorialConfig {
         }
         
         // Step 2: DND Toggle Button
-        View toggleButton = activity.findViewById(R.id.btn_toggle_dnd);
+        View toggleButton = activity.findViewById(R.id.btn_dnd_menu);
         if (toggleButton != null) {
             tutorialManager.addStep(
                 new GameTutorialManager.TutorialStep(

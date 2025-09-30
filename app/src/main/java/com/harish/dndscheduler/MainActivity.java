@@ -5,6 +5,7 @@ import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
 import android.app.NotificationManager;
@@ -19,11 +20,16 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.Spinner;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -40,8 +46,8 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity {
 
     private TextView tvServiceStatus;
-    private LinearLayout btnToggleDnd;
-    private TextView tvButtonStatus;
+    private LinearLayout btnDndMenu;
+    private TextView tvDndMenuStatus;
     private LinearLayout layoutSaturdayDropdown;
     private TextView tvSaturdaySelection;
     private RecyclerView rvTodayClasses;
@@ -122,24 +128,36 @@ public class MainActivity extends AppCompatActivity {
 
     private void initializeViews() {
         tvServiceStatus = findViewById(R.id.tv_service_status);
-        btnToggleDnd = findViewById(R.id.btn_toggle_dnd);
-        tvButtonStatus = findViewById(R.id.tv_button_status);
+        btnDndMenu = findViewById(R.id.btn_dnd_menu);
+        tvDndMenuStatus = findViewById(R.id.tv_dnd_menu_status);
         layoutSaturdayDropdown = findViewById(R.id.layout_saturday_dropdown);
         tvSaturdaySelection = findViewById(R.id.tv_saturday_selection);
         rvTodayClasses = findViewById(R.id.rv_today_classes);
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout);
         spinnerSaturdaySchedule = findViewById(R.id.spinner_saturday_schedule);
 
-        // Add null check and debugging for the button
-        if (btnToggleDnd == null) {
-            Log.e("MainActivity", "btnToggleDnd is null - check layout file");
+        // Add comprehensive null checks and debugging
+        Log.d("MainActivity", "=== VIEW INITIALIZATION DEBUG ===");
+        Log.d("MainActivity", "tvServiceStatus: " + (tvServiceStatus != null ? "OK" : "NULL"));
+        Log.d("MainActivity", "btnDndMenu: " + (btnDndMenu != null ? "OK" : "NULL"));
+        Log.d("MainActivity", "tvDndMenuStatus: " + (tvDndMenuStatus != null ? "OK" : "NULL"));
+        Log.d("MainActivity", "layoutSaturdayDropdown: " + (layoutSaturdayDropdown != null ? "OK" : "NULL"));
+        Log.d("MainActivity", "===============================");
+
+        if (btnDndMenu == null) {
+            Log.e("MainActivity", "CRITICAL: btnDndMenu is null - check layout file R.id.btn_dnd_menu");
+            return;
+        }
+        
+        if (tvDndMenuStatus == null) {
+            Log.e("MainActivity", "CRITICAL: tvDndMenuStatus is null - check layout file R.id.tv_dnd_menu_status");
             return;
         }
         
         Log.d("MainActivity", "Setting up button click listeners");
-        btnToggleDnd.setOnClickListener(v -> {
-            Log.d("MainActivity", "Toggle DND button clicked");
-            toggleDndScheduling();
+        btnDndMenu.setOnClickListener(v -> {
+            Log.d("MainActivity", "DND Menu button clicked");
+            showDndMenu();
         });
         
         // Setup Saturday dropdown click listener
@@ -434,6 +452,108 @@ public class MainActivity extends AppCompatActivity {
         updateUI();
     }
 
+    private void showDndMenu() {
+        // Inflate custom dialog layout
+        LayoutInflater inflater = getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_dnd_menu, null);
+        
+        // Get dialog components
+        Switch switchAutoSilent = dialogView.findViewById(R.id.switch_auto_silent);
+        RadioGroup radioGroupMode = dialogView.findViewById(R.id.radio_group_mode);
+        RadioButton radioDnd = dialogView.findViewById(R.id.radio_dnd);
+        RadioButton radioVibrate = dialogView.findViewById(R.id.radio_vibrate);
+        RadioButton radioSilent = dialogView.findViewById(R.id.radio_silent);
+        Button btnCancel = dialogView.findViewById(R.id.btn_cancel);
+        Button btnApply = dialogView.findViewById(R.id.btn_apply);
+        
+        // Store original states for cancel functionality
+        final boolean originalSchedulingEnabled = dndManager.isDndSchedulingEnabled();
+        final String originalMode = dndManager.getSilentModeType();
+        
+        // Set current states
+        switchAutoSilent.setChecked(originalSchedulingEnabled);
+        
+        // Auto Silent toggle - changes immediately, no Apply needed
+        switchAutoSilent.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                enableDNDScheduling();
+                prefs.edit().putBoolean("dnd_scheduling_enabled", true).apply();
+                Toast.makeText(this, "Auto Silent enabled", Toast.LENGTH_SHORT).show();
+            } else {
+                disableDNDScheduling();
+                prefs.edit().putBoolean("dnd_scheduling_enabled", false).apply();
+                Toast.makeText(this, "Auto Silent disabled", Toast.LENGTH_SHORT).show();
+            }
+            updateUI();
+        });
+        
+        // Set current mode selection - no immediate changes, only visual
+        switch (originalMode) {
+            case "dnd":
+                radioDnd.setChecked(true);
+                break;
+            case "vibrate":
+                radioVibrate.setChecked(true);
+                break;
+            case "silent":
+                radioSilent.setChecked(true);
+                break;
+        }
+        
+        // Create dialog
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setView(dialogView);
+        builder.setCancelable(true);
+        
+        AlertDialog dialog = builder.create();
+        
+        // No immediate changes - just UI feedback
+        // Remove the listeners that immediately apply changes
+        
+        // Handle buttons
+        btnCancel.setOnClickListener(v -> {
+            // Revert any changes (though nothing should be applied yet)
+            dialog.dismiss();
+        });
+        
+        btnApply.setOnClickListener(v -> {
+            // Only apply mode selection changes (Auto Silent is handled immediately)
+            String selectedMode = "vibrate"; // default
+            if (radioDnd.isChecked()) {
+                selectedMode = "dnd";
+            } else if (radioVibrate.isChecked()) {
+                selectedMode = "vibrate";
+            } else if (radioSilent.isChecked()) {
+                selectedMode = "silent";
+            }
+            
+            if (!selectedMode.equals(originalMode)) {
+                dndManager.setSilentModeType(selectedMode);
+                String modeText = selectedMode.equals("dnd") ? "DND" : 
+                                 selectedMode.equals("vibrate") ? "Vibrate" : "Silent";
+                Toast.makeText(this, "Switched to " + modeText + " Mode", Toast.LENGTH_SHORT).show();
+            }
+            
+            updateUI();
+            dialog.dismiss();
+        });
+        
+        dialog.show();
+    }
+
+    private void toggleModeType() {
+        String currentMode = dndManager.getSilentModeType();
+        String newMode = "dnd".equals(currentMode) ? "vibrate" : "dnd";
+        
+        dndManager.setSilentModeType(newMode);
+        
+        Toast.makeText(this, 
+            "vibrate".equals(newMode) ? "Switched to Vibrate Mode" : "Switched to Do Not Disturb Mode", 
+            Toast.LENGTH_SHORT).show();
+        
+        updateUI();
+    }
+
     private void refreshTimetable() {
         Log.d("MainActivity", "Refresh timetable triggered");
         
@@ -454,18 +574,28 @@ public class MainActivity extends AppCompatActivity {
         
         Log.d("MainActivity", "Updating UI - Scheduling Enabled: " + isSchedulingEnabled + ", DND Currently On: " + isDndCurrentlyOn);
 
-        if (isSchedulingEnabled) {
-            tvButtonStatus.setText("Disable");
-            // Keep using the modern ripple background instead of basic color
-            btnToggleDnd.setBackgroundResource(R.drawable.main_button_ripple);
-            tvServiceStatus.setText("✓ Background service active");
-            tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+        // Update service status and DND menu button
+        if (tvServiceStatus != null) {
+            if (isSchedulingEnabled) {
+                tvServiceStatus.setText("✓ Background service active");
+                tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+            } else {
+                tvServiceStatus.setText("✗ Background service inactive");
+                tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            }
         } else {
-            tvButtonStatus.setText("Enable");
-            // Keep using the modern ripple background instead of basic color
-            btnToggleDnd.setBackgroundResource(R.drawable.main_button_ripple);
-            tvServiceStatus.setText("✗ Background service inactive");
-            tvServiceStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            Log.e("MainActivity", "tvServiceStatus is null in updateUI");
+        }
+
+        // Update DND Menu button label based on current mode
+        if (tvDndMenuStatus != null) {
+            String currentMode = dndManager.getSilentModeType();
+            String modeText = currentMode.equals("dnd") ? "DND" : 
+                             currentMode.equals("vibrate") ? "VIBRATE" : "SILENT";
+            tvDndMenuStatus.setText(modeText);
+            Log.d("MainActivity", "Updated DND Menu status to: " + modeText);
+        } else {
+            Log.e("MainActivity", "tvDndMenuStatus is null in updateUI");
         }
 
         updateReliabilityStatus();

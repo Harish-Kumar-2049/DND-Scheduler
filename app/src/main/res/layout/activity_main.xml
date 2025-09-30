@@ -51,7 +51,7 @@
 
         </LinearLayout>
 
-        <!-- Button and Dropdown Row -->
+        <!-- Button Row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -59,9 +59,9 @@
             android:layout_marginBottom="16dp"
             android:weightSum="2">
 
-            <!-- Stylish Toggle Button - Styled as Dropdown -->
+            <!-- DND Menu Button -->
             <LinearLayout
-                android:id="@+id/btn_toggle_dnd"
+                android:id="@+id/btn_dnd_menu"
                 android:layout_width="0dp"
                 android:layout_height="76dp"
                 android:layout_weight="1"
@@ -75,10 +75,9 @@
                 android:focusable="true">
 
                 <TextView
-                    android:id="@+id/tv_button_label"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Auto DND:"
+                    android:text="DND MENU:"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="@color/white"
@@ -88,10 +87,10 @@
                     android:ellipsize="end" />
 
                 <TextView
-                    android:id="@+id/tv_button_status"
+                    android:id="@+id/tv_dnd_menu_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Enable"
+                    android:text="VIBRATE"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="@color/white"
@@ -101,7 +100,7 @@
 
             </LinearLayout>
 
-            <!-- Saturday Schedule Dropdown - Styled as Button -->
+            <!-- Saturday Schedule Dropdown -->
             <LinearLayout
                 android:id="@+id/layout_saturday_dropdown"
                 android:layout_width="0dp"

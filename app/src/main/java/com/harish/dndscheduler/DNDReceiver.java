@@ -24,7 +24,10 @@ public class DNDReceiver extends BroadcastReceiver {
 
         // Existing code for handling DND ON/OFF actions
         String action = intent.getAction();
-        Log.d("DNDReceiver", "Alarm received: " + action);
+        Log.d("DNDReceiver", "=== ALARM RECEIVED ===");
+        Log.d("DNDReceiver", "Action: " + action);
+        Log.d("DNDReceiver", "Time: " + System.currentTimeMillis());
+        Log.d("DNDReceiver", "==================");
 
         try {
             DNDManager dndManager = DNDManager.getInstance(context);
@@ -36,14 +39,21 @@ public class DNDReceiver extends BroadcastReceiver {
                     return;
                 }
                 
+                Log.d("DNDReceiver", "Current silent mode type: " + dndManager.getSilentModeType());
                 boolean isBackup = intent.getBooleanExtra("isBackup", false);
-                if (dndManager.setDndOn()) {
-                    Log.d("DNDReceiver", "DND turned ON via " + (isBackup ? "backup " : "") + "alarm");
+                if (dndManager.setSilentModeOn()) {
+                    String modeType = dndManager.getSilentModeType();
+                    String modeText = modeType.equals("dnd") ? "DND" : 
+                                     modeType.equals("vibrate") ? "Vibrate mode" : "Silent mode";
+                    Log.d("DNDReceiver", modeText + " turned ON via " + (isBackup ? "backup " : "") + "alarm");
                     if (!isBackup) { // Only reschedule from primary alarm
                         rescheduleAlarmForNextWeek(context, intent);
                     }
                 } else {
-                    Log.e("DNDReceiver", "Failed to turn ON DND via " + (isBackup ? "backup " : "") + "alarm");
+                    String modeType = dndManager.getSilentModeType();
+                    String modeText = modeType.equals("dnd") ? "DND" : 
+                                     modeType.equals("vibrate") ? "Vibrate mode" : "Silent mode";
+                    Log.e("DNDReceiver", "Failed to turn ON " + modeText + " via " + (isBackup ? "backup " : "") + "alarm");
                 }
                 
             } else if ("TURN_OFF_DND".equals(action) || "TURN_OFF_DND_BACKUP".equals(action)) {
@@ -53,14 +63,22 @@ public class DNDReceiver extends BroadcastReceiver {
                     return;
                 }
                 
+                Log.d("DNDReceiver", "=== TURNING OFF SILENT MODE ===");
+                Log.d("DNDReceiver", "Current silent mode type: " + dndManager.getSilentModeType());
                 boolean isBackup = intent.getBooleanExtra("isBackup", false);
-                if (dndManager.setDndOff()) {
-                    Log.d("DNDReceiver", "DND turned OFF via " + (isBackup ? "backup " : "") + "alarm");
+                if (dndManager.setSilentModeOff()) {
+                    String modeType = dndManager.getSilentModeType();
+                    String modeText = modeType.equals("dnd") ? "DND" : 
+                                     modeType.equals("vibrate") ? "Vibrate mode" : "Silent mode";
+                    Log.d("DNDReceiver", modeText + " turned OFF via " + (isBackup ? "backup " : "") + "alarm");
                     if (!isBackup) { // Only reschedule from primary alarm
                         rescheduleAlarmForNextWeek(context, intent);
                     }
                 } else {
-                    Log.e("DNDReceiver", "Failed to turn OFF DND via " + (isBackup ? "backup " : "") + "alarm");
+                    String modeType = dndManager.getSilentModeType();
+                    String modeText = modeType.equals("dnd") ? "DND" : 
+                                     modeType.equals("vibrate") ? "Vibrate mode" : "Silent mode";
+                    Log.e("DNDReceiver", "Failed to turn OFF " + modeText + " via " + (isBackup ? "backup " : "") + "alarm");
                 }
                 
             } else if ("PERIODIC_CHECK".equals(action)) {

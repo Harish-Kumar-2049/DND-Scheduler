@@ -12,6 +12,7 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,6 +26,9 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -51,11 +55,13 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout layoutSaturdayDropdown;
     private TextView tvSaturdaySelection;
     private RecyclerView rvTodayClasses;
+    private TextView tvNoClasses;
     private SwipeRefreshLayout swipeRefreshLayout;
     private Spinner spinnerSaturdaySchedule;
 
     private SharedPreferences prefs;
     private DNDManager dndManager;
+    private CaptchaRefreshManager captchaRefreshManager;
     private Handler updateHandler;
     private Runnable updateRunnable;
     private android.app.Dialog dndAccessDialog;
@@ -133,17 +139,11 @@ public class MainActivity extends AppCompatActivity {
         layoutSaturdayDropdown = findViewById(R.id.layout_saturday_dropdown);
         tvSaturdaySelection = findViewById(R.id.tv_saturday_selection);
         rvTodayClasses = findViewById(R.id.rv_today_classes);
+        tvNoClasses = findViewById(R.id.tv_no_classes);
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout);
         spinnerSaturdaySchedule = findViewById(R.id.spinner_saturday_schedule);
 
-        // Add comprehensive null checks and debugging
-        Log.d("MainActivity", "=== VIEW INITIALIZATION DEBUG ===");
-        Log.d("MainActivity", "tvServiceStatus: " + (tvServiceStatus != null ? "OK" : "NULL"));
-        Log.d("MainActivity", "btnDndMenu: " + (btnDndMenu != null ? "OK" : "NULL"));
-        Log.d("MainActivity", "tvDndMenuStatus: " + (tvDndMenuStatus != null ? "OK" : "NULL"));
-        Log.d("MainActivity", "layoutSaturdayDropdown: " + (layoutSaturdayDropdown != null ? "OK" : "NULL"));
-        Log.d("MainActivity", "===============================");
-
+        // Add null checks
         if (btnDndMenu == null) {
             Log.e("MainActivity", "CRITICAL: btnDndMenu is null - check layout file R.id.btn_dnd_menu");
             return;
@@ -183,6 +183,7 @@ public class MainActivity extends AppCompatActivity {
     private void setupManagers() {
         prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
         dndManager = DNDManager.getInstance(this);
+        captchaRefreshManager = new CaptchaRefreshManager(this);
         
         // Setup Saturday spinner after prefs is initialized
         setupSaturdaySpinner();
@@ -478,11 +479,9 @@ public class MainActivity extends AppCompatActivity {
             if (isChecked) {
                 enableDNDScheduling();
                 prefs.edit().putBoolean("dnd_scheduling_enabled", true).apply();
-                Toast.makeText(this, "Auto Silent enabled", Toast.LENGTH_SHORT).show();
             } else {
                 disableDNDScheduling();
                 prefs.edit().putBoolean("dnd_scheduling_enabled", false).apply();
-                Toast.makeText(this, "Auto Silent disabled", Toast.LENGTH_SHORT).show();
             }
             updateUI();
         });
@@ -529,9 +528,6 @@ public class MainActivity extends AppCompatActivity {
             
             if (!selectedMode.equals(originalMode)) {
                 dndManager.setSilentModeType(selectedMode);
-                String modeText = selectedMode.equals("dnd") ? "DND" : 
-                                 selectedMode.equals("vibrate") ? "Vibrate" : "Silent";
-                Toast.makeText(this, "Switched to " + modeText + " Mode", Toast.LENGTH_SHORT).show();
             }
             
             updateUI();
@@ -539,6 +535,191 @@ public class MainActivity extends AppCompatActivity {
         });
         
         dialog.show();
+    }
+
+    private void showCaptchaRefreshDialog() {
+        // Check if credentials are available
+        if (!captchaRefreshManager.hasStoredCredentials()) {
+            // Fall back to full login if no credentials stored
+            showFullLoginFallback();
+            return;
+        }
+
+        // Inflate custom dialog layout
+        LayoutInflater inflater = getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_captcha_refresh, null);
+        
+        // Get dialog components
+        ImageView imgCaptcha = dialogView.findViewById(R.id.img_captcha);
+        EditText etCaptcha = dialogView.findViewById(R.id.et_captcha);
+        ImageButton btnRefreshCaptcha = dialogView.findViewById(R.id.btn_refresh_captcha);
+        Button btnSubmit = dialogView.findViewById(R.id.btn_submit);
+        LinearLayout tvFullLogin = dialogView.findViewById(R.id.tv_full_login);
+        
+        // Create dialog with Material 3 styling
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog);
+        builder.setView(dialogView);
+        builder.setCancelable(true);
+        
+        AlertDialog dialog = builder.create();
+        
+        // Stop refresh loading if dialog is dismissed by back gesture or outside tap
+        dialog.setOnDismissListener(dialogInterface -> {
+            if (swipeRefreshLayout.isRefreshing()) {
+                swipeRefreshLayout.setRefreshing(false);
+            }
+        });
+        
+        // Apply window styling for modern look
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            dialog.getWindow().setWindowAnimations(android.R.style.Animation_Dialog);
+        }
+        
+        // Setup captcha refresh callback
+        CaptchaRefreshManager.CaptchaRefreshCallback callback = new CaptchaRefreshManager.CaptchaRefreshCallback() {
+            @Override
+            public void onCaptchaFetched(Bitmap captchaBitmap) {
+                imgCaptcha.setImageBitmap(captchaBitmap);
+                btnRefreshCaptcha.setEnabled(true);
+                btnSubmit.setEnabled(true);
+                // Reset button state in case it was in processing mode
+                btnSubmit.setText("Submit");
+                btnSubmit.setAlpha(1.0f);
+            }
+
+            @Override
+            public void onRefreshSuccess() {
+                // Reset button state
+                btnSubmit.setText("Submit");
+                btnSubmit.setAlpha(1.0f);
+                swipeRefreshLayout.setRefreshing(false);
+                Toast.makeText(MainActivity.this, "Timetable refreshed successfully", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                updateUI(); // Refresh the UI with new data
+            }
+
+            @Override
+            public void onRefreshError(String error) {
+                // Reset button state
+                btnSubmit.setText("Submit");
+                btnSubmit.setAlpha(1.0f);
+                swipeRefreshLayout.setRefreshing(false);
+                btnRefreshCaptcha.setEnabled(true);
+                btnSubmit.setEnabled(true);
+                
+                // Clear captcha input on error
+                etCaptcha.setText("");
+                
+                // Show specific error message
+                if (error.contains("Invalid captcha")) {
+                    Toast.makeText(MainActivity.this, "Invalid captcha. Please try again.", Toast.LENGTH_SHORT).show();
+                    // Fetch new captcha for retry
+                    fetchCaptchaForDialog(imgCaptcha, btnRefreshCaptcha, btnSubmit);
+                } else if (error.contains("credentials")) {
+                    Toast.makeText(MainActivity.this, "Please use full login to update credentials.", Toast.LENGTH_LONG).show();
+                    dialog.dismiss();
+                    showFullLoginFallback();
+                } else {
+                    Toast.makeText(MainActivity.this, error, Toast.LENGTH_SHORT).show();
+                    // Fetch new captcha for retry on network errors
+                    fetchCaptchaForDialog(imgCaptcha, btnRefreshCaptcha, btnSubmit);
+                }
+            }
+
+            @Override
+            public void onCredentialsRequired() {
+                swipeRefreshLayout.setRefreshing(false);
+                dialog.dismiss();
+                showFullLoginFallback();
+            }
+        };
+        
+        // Function to fetch captcha
+        Runnable fetchCaptcha = () -> {
+            btnRefreshCaptcha.setEnabled(false);
+            btnSubmit.setEnabled(false);
+            captchaRefreshManager.fetchCaptcha(callback);
+        };
+        
+        // Handle refresh captcha button
+        btnRefreshCaptcha.setOnClickListener(v -> {
+            etCaptcha.setText(""); // Clear previous captcha input
+            fetchCaptcha.run();
+        });
+        
+        // Handle submit button
+        btnSubmit.setOnClickListener(v -> {
+            String captcha = etCaptcha.getText().toString().trim();
+            if (captcha.isEmpty()) {
+                etCaptcha.setError("Please enter captcha");
+                return;
+            }
+            
+            // Show visual feedback that processing is happening
+            btnRefreshCaptcha.setEnabled(false);
+            btnSubmit.setEnabled(false);
+            btnSubmit.setText("Processing...");
+            btnSubmit.setAlpha(0.7f); // Make it slightly transparent to show it's disabled
+            
+            captchaRefreshManager.performRefreshWithCaptcha(captcha, callback);
+        });
+        
+        // Handle full login option
+        tvFullLogin.setOnClickListener(v -> {
+            swipeRefreshLayout.setRefreshing(false);
+            dialog.dismiss();
+            showFullLoginFallback();
+        });
+        
+        dialog.show();
+        
+        // Fetch initial captcha
+        fetchCaptcha.run();
+    }
+    
+    private void fetchCaptchaForDialog(ImageView imgCaptcha, ImageButton btnRefreshCaptcha, 
+                                     Button btnSubmit) {
+        btnRefreshCaptcha.setEnabled(false);
+        btnSubmit.setEnabled(false);
+        
+        captchaRefreshManager.fetchCaptcha(new CaptchaRefreshManager.CaptchaRefreshCallback() {
+            @Override
+            public void onCaptchaFetched(Bitmap captchaBitmap) {
+                imgCaptcha.setImageBitmap(captchaBitmap);
+                btnRefreshCaptcha.setEnabled(true);
+                btnSubmit.setEnabled(true);
+                // Reset button state in case it was in processing mode
+                btnSubmit.setText("Submit");
+                btnSubmit.setAlpha(1.0f);
+            }
+
+            @Override
+            public void onRefreshSuccess() {
+                // This won't be called for captcha-only fetch
+            }
+
+            @Override
+            public void onRefreshError(String error) {
+                btnRefreshCaptcha.setEnabled(true);
+                btnSubmit.setEnabled(true);
+                Toast.makeText(MainActivity.this, "Failed to load captcha", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onCredentialsRequired() {
+                // This won't be called for captcha-only fetch
+            }
+        });
+    }
+    
+    private void showFullLoginFallback() {
+        swipeRefreshLayout.setRefreshing(false);
+        
+        // Launch LoginActivity for result
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.putExtra("is_refresh", true);
+        loginActivityLauncher.launch(intent);
     }
 
     private void toggleModeType() {
@@ -562,10 +743,8 @@ public class MainActivity extends AppCompatActivity {
             swipeRefreshLayout.setRefreshing(true);
         }
         
-        // Launch LoginActivity for result instead of finishing this activity
-        Intent intent = new Intent(this, LoginActivity.class);
-        intent.putExtra("is_refresh", true); // Flag to indicate this is a refresh operation
-        loginActivityLauncher.launch(intent);
+        // Try captcha-only refresh first, fall back to full login if needed
+        showCaptchaRefreshDialog();
     }
 
     private void updateUI() {
@@ -625,7 +804,16 @@ public class MainActivity extends AppCompatActivity {
         Log.d("UI_DEBUG", "Filtered to " + todaySlots.size() + " slots for today's display");
         Log.d("UI_DEBUG", "=== End UI data retrieval ===");
         
-        rvTodayClasses.setAdapter(new ClassSlotAdapter(todaySlots));
+        if (todaySlots.isEmpty()) {
+            // Show "No classes today" message
+            rvTodayClasses.setVisibility(View.GONE);
+            tvNoClasses.setVisibility(View.VISIBLE);
+        } else {
+            // Show classes list
+            rvTodayClasses.setVisibility(View.VISIBLE);
+            tvNoClasses.setVisibility(View.GONE);
+            rvTodayClasses.setAdapter(new ClassSlotAdapter(todaySlots));
+        }
     }
 
     /**
@@ -1106,6 +1294,9 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         if (updateHandler != null) {
             updateHandler.removeCallbacks(updateRunnable);
+        }
+        if (captchaRefreshManager != null) {
+            captchaRefreshManager.shutdown();
         }
     }
 }

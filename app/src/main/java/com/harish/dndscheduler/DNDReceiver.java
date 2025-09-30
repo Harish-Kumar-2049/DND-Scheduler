@@ -24,10 +24,7 @@ public class DNDReceiver extends BroadcastReceiver {
 
         // Existing code for handling DND ON/OFF actions
         String action = intent.getAction();
-        Log.d("DNDReceiver", "=== ALARM RECEIVED ===");
-        Log.d("DNDReceiver", "Action: " + action);
-        Log.d("DNDReceiver", "Time: " + System.currentTimeMillis());
-        Log.d("DNDReceiver", "==================");
+        Log.d("DNDReceiver", "Alarm received: " + action);
 
         try {
             DNDManager dndManager = DNDManager.getInstance(context);
@@ -39,7 +36,6 @@ public class DNDReceiver extends BroadcastReceiver {
                     return;
                 }
                 
-                Log.d("DNDReceiver", "Current silent mode type: " + dndManager.getSilentModeType());
                 boolean isBackup = intent.getBooleanExtra("isBackup", false);
                 if (dndManager.setSilentModeOn()) {
                     String modeType = dndManager.getSilentModeType();
@@ -63,8 +59,6 @@ public class DNDReceiver extends BroadcastReceiver {
                     return;
                 }
                 
-                Log.d("DNDReceiver", "=== TURNING OFF SILENT MODE ===");
-                Log.d("DNDReceiver", "Current silent mode type: " + dndManager.getSilentModeType());
                 boolean isBackup = intent.getBooleanExtra("isBackup", false);
                 if (dndManager.setSilentModeOff()) {
                     String modeType = dndManager.getSilentModeType();

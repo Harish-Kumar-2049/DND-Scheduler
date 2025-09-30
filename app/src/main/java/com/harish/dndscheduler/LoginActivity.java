@@ -287,7 +287,7 @@ public class LoginActivity extends AppCompatActivity {
                         if (location != null && location.contains("home.jsp")) {
                             Log.d("LoginFlow", "Login successful - redirecting to home");
                             // Follow the redirect
-                            followRedirectAndFetchTimetable(location);
+                            followRedirectAndFetchTimetable(location, regNo, password);
                         } else {
                             handleLoginFailure("Login failed - unexpected redirect");
                         }
@@ -296,7 +296,7 @@ public class LoginActivity extends AppCompatActivity {
                         // Response body length check (debug log removed for production)
 
                         if (isLoginSuccessful(loginResponse, responseBody)) {
-                            fetchTimetableAndProceed();
+                            fetchTimetableAndProceed(regNo, password);
                         } else {
                             handleLoginFailure(responseBody);
                         }
@@ -314,7 +314,7 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
-    private void followRedirectAndFetchTimetable(String redirectUrl) {
+    private void followRedirectAndFetchTimetable(String redirectUrl, String username, String password) {
         try {
             // Handle relative URLs
             String fullUrl = redirectUrl.startsWith("http") ? redirectUrl : BASE_URL + redirectUrl;
@@ -338,7 +338,7 @@ public class LoginActivity extends AppCompatActivity {
                 if (homeResponse.isSuccessful()) {
                     // Small delay before fetching timetable
                     Thread.sleep(HUMAN_DELAY_MS);
-                    fetchTimetableAndProceed();
+                    fetchTimetableAndProceed(username, password);
                 } else {
                     throw new Exception("Home page fetch failed: " + homeResponse.code());
                 }
@@ -384,7 +384,7 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
-    private void fetchTimetableAndProceed() {
+    private void fetchTimetableAndProceed(String username, String password) {
         executorService.execute(() -> {
             try {
                 Log.d("LoginFlow", "Step 4: Fetching timetable");
@@ -419,11 +419,13 @@ public class LoginActivity extends AppCompatActivity {
                             timetableData = fullHtml;  // fallback to full HTML
                         }
 
-                        // ✅ Save extracted HTML
+                        // ✅ Save extracted HTML and store credentials for future refresh
                         SharedPreferences prefs = getSharedPreferences("dnd_prefs", MODE_PRIVATE);
                         prefs.edit()
                                 .putString("timetable_html", timetableData)
                                 .putLong("timetable_fetch_time", System.currentTimeMillis())
+                                .putString("last_username", username)
+                                .putString("last_password", password)
                                 .apply();
 
                         mainHandler.post(() -> {

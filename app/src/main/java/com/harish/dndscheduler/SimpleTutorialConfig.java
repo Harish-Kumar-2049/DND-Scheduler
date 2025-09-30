@@ -19,7 +19,7 @@ public class SimpleTutorialConfig {
                 "welcome",
                 serviceStatusView,
                 "Welcome to DND Scheduler! 🎉",
-                "Shows the current status of the Do Not Disturb. Let's explore all the features!"
+                "Shows the current status of auto-dnd enabling functionality status. Let's explore all the features!"
             );
         }
         

@@ -12,7 +12,9 @@ import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
 
+import java.text.DateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 public class DNDManager {
@@ -532,30 +534,11 @@ public class DNDManager {
     }
 
     private boolean setVibrateMode() {
-        Log.d(TAG, "=== SETTING VIBRATE MODE ===");
-        Log.d(TAG, "Current ringer mode: " + audioManager.getRingerMode());
-        
-        // Store current ringer mode to restore later (only if not already stored)
-        if (!prefs.getBoolean("ringer_mode_stored", false)) {
-            int currentRingerMode = audioManager.getRingerMode();
-            prefs.edit()
-                    .putInt("original_ringer_mode", currentRingerMode)
-                    .putBoolean("ringer_mode_stored", true)
-                    .apply();
-            Log.d(TAG, "Stored original ringer mode: " + currentRingerMode);
-        } else {
-            Log.d(TAG, "Original ringer mode already stored: " + prefs.getInt("original_ringer_mode", -1));
-        }
+        // Store current ringer mode to restore later (only once per day)
+        storeOriginalModeIfNeeded();
         
         // Set to vibrate mode
-        try {
-            audioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
-            Log.d(TAG, "Successfully set to VIBRATE mode");
-            Log.d(TAG, "New ringer mode: " + audioManager.getRingerMode());
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to set vibrate mode: " + e.getMessage());
-            return false;
-        }
+        audioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
         prefs.edit().putBoolean("dnd_currently_on", true).apply();
         prefs.edit().putBoolean("dnd_set_by_app", true).apply();
         Log.d(TAG, "Vibrate mode turned ON");
@@ -563,66 +546,75 @@ public class DNDManager {
     }
 
     private boolean setSilentMode() {
-        Log.d(TAG, "=== SETTING SILENT MODE ===");
-        Log.d(TAG, "Current ringer mode: " + audioManager.getRingerMode());
-        
-        // Store current ringer mode to restore later (only if not already stored)
-        if (!prefs.getBoolean("ringer_mode_stored", false)) {
-            int currentRingerMode = audioManager.getRingerMode();
-            prefs.edit()
-                    .putInt("original_ringer_mode", currentRingerMode)
-                    .putBoolean("ringer_mode_stored", true)
-                    .apply();
-            Log.d(TAG, "Stored original ringer mode: " + currentRingerMode);
-        } else {
-            Log.d(TAG, "Original ringer mode already stored: " + prefs.getInt("original_ringer_mode", -1));
-        }
+        // Store current ringer mode to restore later (only once per day)
+        storeOriginalModeIfNeeded();
         
         // Set to silent mode
-        try {
-            audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
-            Log.d(TAG, "Successfully set to SILENT mode");
-            Log.d(TAG, "New ringer mode: " + audioManager.getRingerMode());
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to set silent mode: " + e.getMessage());
-            return false;
-        }
+        audioManager.setRingerMode(AudioManager.RINGER_MODE_SILENT);
         prefs.edit().putBoolean("dnd_currently_on", true).apply();
         prefs.edit().putBoolean("dnd_set_by_app", true).apply();
         Log.d(TAG, "Silent mode turned ON");
         return true;
     }
 
-    private boolean restoreNormalMode() {
-        Log.d(TAG, "=== RESTORING NORMAL MODE ===");
-        Log.d(TAG, "Current ringer mode: " + audioManager.getRingerMode());
+    /**
+     * Store the original ringer mode only once per day to avoid issues with consecutive classes
+     */
+    private void storeOriginalModeIfNeeded() {
+        String currentDate = java.text.DateFormat.getDateInstance().format(new java.util.Date());
+        String storedDate = prefs.getString("original_mode_date", "");
         
+        // Only store if we haven't stored for today or if no mode is stored at all
+        if (!currentDate.equals(storedDate) || !prefs.getBoolean("ringer_mode_stored", false)) {
+            int currentRingerMode = audioManager.getRingerMode();
+            prefs.edit()
+                    .putInt("original_ringer_mode", currentRingerMode)
+                    .putBoolean("ringer_mode_stored", true)
+                    .putString("original_mode_date", currentDate)
+                    .apply();
+            Log.d(TAG, "Stored original ringer mode: " + currentRingerMode + " for date: " + currentDate);
+        }
+    }
+
+    /**
+     * Store the original DND state only once per day for true DND mode
+     */
+    private void storeOriginalDndStateIfNeeded() {
+        String currentDate = DateFormat.getDateInstance().format(new Date());
+        String storedDate = prefs.getString("original_dnd_date", "");
+        
+        // Only store if we haven't stored for today or if no state is stored at all
+        if (!currentDate.equals(storedDate) || !prefs.getBoolean("dnd_state_stored", false)) {
+            int currentFilter = notificationManager.getCurrentInterruptionFilter();
+            prefs.edit()
+                    .putInt("original_dnd_filter", currentFilter)
+                    .putBoolean("dnd_state_stored", true)
+                    .putString("original_dnd_date", currentDate)
+                    .apply();
+            Log.d(TAG, "Stored original DND filter: " + currentFilter + " for date: " + currentDate);
+        }
+    }
+
+    private boolean restoreNormalMode() {
         // Restore original ringer mode
         int originalRingerMode = prefs.getInt("original_ringer_mode", AudioManager.RINGER_MODE_NORMAL);
-        Log.d(TAG, "Restoring to original ringer mode: " + originalRingerMode);
+        audioManager.setRingerMode(originalRingerMode);
         
-        try {
-            audioManager.setRingerMode(originalRingerMode);
-            Log.d(TAG, "Successfully restored to original mode");
-            Log.d(TAG, "New ringer mode: " + audioManager.getRingerMode());
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to restore ringer mode: " + e.getMessage());
-            return false;
-        }
-        
-        // Clear the storage flag so next activation can store the current mode again
+        // Only clear DND status but keep the original mode stored for consecutive classes
         prefs.edit()
                 .putBoolean("dnd_currently_on", false)
                 .putBoolean("dnd_set_by_app", false)
-                .putBoolean("ringer_mode_stored", false)
                 .apply();
         
-        Log.d(TAG, "Cleared storage flags");
+        Log.d(TAG, "Restored to original ringer mode: " + originalRingerMode);
         return true;
     }
 
     private boolean setDndMode() {
         if (hasDndAccess()) {
+            // Store the original DND state before changing it
+            storeOriginalDndStateIfNeeded();
+            
             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE);
             prefs.edit().putBoolean("dnd_currently_on", true).apply();
             prefs.edit().putBoolean("dnd_set_by_app", true).apply();
@@ -645,10 +637,12 @@ public class DNDManager {
             return false;
         }
         if (hasDndAccess()) {
-            notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL);
+            // Restore original DND filter instead of just setting to ALL
+            int originalFilter = prefs.getInt("original_dnd_filter", NotificationManager.INTERRUPTION_FILTER_ALL);
+            notificationManager.setInterruptionFilter(originalFilter);
             prefs.edit().putBoolean("dnd_currently_on", false).apply();
             prefs.edit().putBoolean("dnd_set_by_app", false).apply();
-            Log.d(TAG, "DND turned OFF");
+            Log.d(TAG, "DND turned OFF, restored to filter: " + originalFilter);
             return true;
         } else {
             requestDndAccessSafely();

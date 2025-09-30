@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DND Access Request Card with Tutorial Styling -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dnd_access_overlay"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/tutorial_overlay_background"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Blur Background Effect -->
+    <View
+        android:id="@+id/blur_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/tutorial_blur_background" />
+
+    <!-- DND Access Card Container -->
+    <LinearLayout
+        android:id="@+id/dnd_access_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:background="@drawable/tutorial_content_background"
+        android:layout_margin="16dp"
+        android:elevation="8dp">
+
+        <!-- Icon -->
+        <ImageView
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_notification"
+            android:layout_marginBottom="16dp"
+            android:tint="@color/tutorial_primary" />
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Do Not Disturb Access Required"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/tutorial_text_primary"
+            android:layout_marginBottom="12dp"
+            android:gravity="center" />
+
+        <!-- Description -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="This app needs Do Not Disturb access to automatically:\n\n• Turn ON silent mode during your classes\n• Turn OFF silent mode when classes end\n• Schedule weekend settings based on your timetable\n\nThis helps you stay focused during classes without manual setup."
+            android:textSize="16sp"
+            android:textColor="@color/tutorial_text_secondary"
+            android:layout_marginBottom="24dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp" />
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <!-- Not Now Button -->
+            <TextView
+                android:id="@+id/btn_not_now"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Not Now"
+                android:textSize="16sp"
+                android:textColor="@color/tutorial_button_secondary"
+                android:background="@drawable/tutorial_button_secondary"
+                android:padding="12dp"
+                android:gravity="center"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Grant Access Button -->
+            <TextView
+                android:id="@+id/btn_grant_access"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Grant Access"
+                android:textSize="16sp"
+                android:textColor="@color/tutorial_button_primary_text"
+                android:background="@drawable/tutorial_button_primary"
+                android:padding="12dp"
+                android:gravity="center"
+                android:layout_marginStart="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

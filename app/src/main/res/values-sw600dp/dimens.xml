@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Large screens (tablets, 7+ inches) -->
+    <dimen name="header_text_size">32sp</dimen>
+    <dimen name="section_header_size">24sp</dimen>
+    <dimen name="button_text_size">22sp</dimen>
+    <dimen name="body_text_size">18sp</dimen>
+    <dimen name="small_text_size">16sp</dimen>
+    <dimen name="caption_text_size">14sp</dimen>
+    
+    <!-- Larger padding for tablet comfort -->
+    <dimen name="class_item_padding">16dp</dimen>
+    <dimen name="class_item_margin">8dp</dimen>
+    <dimen name="time_column_width">140dp</dimen>
+    <dimen name="subject_padding">16dp</dimen>
+    
+    <!-- Much larger container for tablets -->
+    <dimen name="classes_container_height">600dp</dimen>
+    <dimen name="classes_min_height">200dp</dimen>
+</resources>

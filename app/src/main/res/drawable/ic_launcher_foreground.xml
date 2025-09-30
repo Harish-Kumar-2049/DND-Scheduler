@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Purple gradient background exactly matching reference -->
+    <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient 
+                android:type="linear"
+                android:startColor="#9333EA"
+                android:endColor="#7C3AED"
+                android:angle="135"/>
+        </aapt:attr>
+    </path>
+    
+    <!-- Main content positioned for adaptive icon safe area -->
+    <group android:translateX="54" android:translateY="54">
+        
+        <!-- Large bold DND text -->
+        <group android:translateY="-8">
+            <!-- Letter D -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M-30,-15 L-30,15 L-15,15 C-6,15 0,9 0,0 C0,-9 -6,-15 -15,-15 Z 
+                           M-22,-7 L-15,-7 C-11,-7 -8,-4 -8,0 C-8,4 -11,7 -15,7 L-22,7 Z"/>
+            
+            <!-- Letter N -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M-6,-15 L-6,15 L2,15 L2,-5 L14,15 L22,15 L22,-15 L14,-15 L14,5 L2,-15 Z"/>
+            
+            <!-- Letter D -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M30,-15 L30,15 L45,15 C54,15 60,9 60,0 C60,-9 54,-15 45,-15 Z 
+                           M38,-7 L45,-7 C49,-7 52,-4 52,0 C52,4 49,7 45,7 L38,7 Z"/>
+        </group>
+        
+        <!-- SCHEDULER text - properly spaced and sized -->
+        <group android:translateY="18" android:scaleX="0.85" android:scaleY="0.85">
+            <!-- S -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M-42,-3 L-42,-1 L-38,-1 C-37,-1 -36,0 -36,1 C-36,2 -37,3 -38,3 L-42,3 L-42,5 L-38,5 C-35,5 -32,2 -32,1 C-32,-2 -35,-3 -38,-3 Z"/>
+            
+            <!-- C -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M-28,1 C-28,-2 -25,-5 -22,-5 L-20,-5 L-20,-3 L-22,-3 C-24,-3 -26,0 -26,1 C-26,2 -24,5 -22,5 L-20,5 L-20,7 L-22,7 C-25,7 -28,4 -28,1 Z"/>
+            
+            <!-- H -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M-16,-5 L-16,7 L-14,7 L-14,2 L-10,2 L-10,7 L-8,7 L-8,-5 L-10,-5 L-10,0 L-14,0 L-14,-5 Z"/>
+            
+            <!-- E -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M-4,-5 L-4,7 L2,7 L2,5 L-2,5 L-2,2 L1,2 L1,0 L-2,0 L-2,-3 L2,-3 L2,-5 Z"/>
+            
+            <!-- D -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M6,-5 L6,7 L10,7 C13,7 16,4 16,1 C16,-2 13,-5 10,-5 Z M8,-3 L10,-3 C11,-3 14,0 14,1 C14,2 11,5 10,5 L8,5 Z"/>
+            
+            <!-- U -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M20,-5 L20,4 C20,6 22,7 24,7 C26,7 28,6 28,4 L28,-5 L26,-5 L26,4 C26,5 25,5 24,5 C23,5 22,5 22,4 L22,-5 Z"/>
+            
+            <!-- L -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M32,-5 L32,7 L38,7 L38,5 L34,5 L34,-5 Z"/>
+            
+            <!-- E -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M42,-5 L42,7 L48,7 L48,5 L44,5 L44,2 L47,2 L47,0 L44,0 L44,-3 L48,-3 L48,-5 Z"/>
+            
+            <!-- R -->
+            <path android:fillColor="#FFFFFF"
+                  android:pathData="M52,-5 L52,7 L54,7 L54,2 L56,2 L58,7 L60,7 L58,2 C59,1 60,0 60,-2 C60,-4 58,-5 56,-5 Z M54,-3 L56,-3 C57,-3 58,-2 58,-2 C58,-1 57,0 56,0 L54,0 Z"/>
+        </group>
+    </group>
+</vector>

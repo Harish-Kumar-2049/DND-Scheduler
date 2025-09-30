@@ -1,25 +1,40 @@
 plugins {
     alias(libs.plugins.android.application)
 }
-
+//new
 android {
     namespace 'com.harish.dndscheduler'
-    compileSdk 36
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.harish.dndscheduler"
         minSdk 24
-        targetSdk 36
-        versionCode 1
-        versionName "1.0"
+        targetSdk 35
+        versionCode 8
+        versionName "1.2.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("../dndscheduler-release.keystore")
+            storePassword "DND2025Secure!"
+            keyAlias "dndscheduler"
+            keyPassword "DND2025Secure!"
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            debuggable true
         }
     }
     compileOptions {

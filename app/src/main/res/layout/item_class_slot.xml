@@ -2,10 +2,11 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="16dp"
+    android:padding="20dp"
     android:background="@drawable/rounded_background"
-    android:layout_marginBottom="8dp"
-    android:elevation="2dp">
+    android:layout_marginBottom="12dp"
+    android:elevation="2dp"
+    android:minHeight="60dp">
 
     <TextView
         android:id="@+id/tv_class_time"
@@ -18,7 +19,8 @@
         android:textColor="@color/primary"
         android:maxLines="1"
         android:ellipsize="none"
-        android:singleLine="true" />
+        android:singleLine="true"
+        android:gravity="center_vertical" />
 
     <TextView
         android:id="@+id/tv_class_subject"
@@ -29,7 +31,8 @@
         android:textSize="16sp"
         android:textColor="@color/text_color"
         android:textStyle="bold"
-        android:paddingStart="16dp"
+        android:paddingStart="20dp"
         android:maxLines="1"
-        android:ellipsize="end"/>
+        android:ellipsize="end"
+        android:gravity="center_vertical"/>
 </LinearLayout>

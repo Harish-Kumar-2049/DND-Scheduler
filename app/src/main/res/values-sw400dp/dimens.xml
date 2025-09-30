@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Medium screens (5+ inches) - More compact design -->
+    <dimen name="header_text_size">26sp</dimen>
+    <dimen name="section_header_size">19sp</dimen>
+    <dimen name="button_text_size">19sp</dimen>
+    <dimen name="body_text_size">16sp</dimen>
+    <dimen name="small_text_size">14sp</dimen>
+    <dimen name="caption_text_size">12sp</dimen>
+    
+    <!-- Optimized spacing for better class visibility -->
+    <dimen name="class_item_padding">10dp</dimen>
+    <dimen name="class_item_margin">5dp</dimen>
+    <dimen name="time_column_width">115dp</dimen>
+    <dimen name="subject_padding">10dp</dimen>
+    
+    <!-- Larger container for more classes -->
+    <dimen name="classes_container_height">420dp</dimen>
+    <dimen name="classes_min_height">140dp</dimen>
+</resources>

@@ -1,6 +1,10 @@
 package com.harish.dndscheduler;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
 import android.app.NotificationManager;
@@ -48,10 +52,16 @@ public class MainActivity extends AppCompatActivity {
     private DNDManager dndManager;
     private Handler updateHandler;
     private Runnable updateRunnable;
+    private android.app.Dialog dndAccessDialog;
+    private boolean isRedirectingToSettings = false;
+    private ActivityResultLauncher<Intent> loginActivityLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Initialize login activity launcher for refresh functionality
+        setupLoginActivityLauncher();
         
         // Check if this is first launch or if timetable data exists
         if (isFirstLaunchOrNoTimetableData()) {
@@ -81,6 +91,33 @@ public class MainActivity extends AppCompatActivity {
         
         // Check if tutorial replay was requested
         handleTutorialReplayIntent();
+    }
+
+    private void setupLoginActivityLauncher() {
+        loginActivityLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    // Stop the refresh animation
+                    if (swipeRefreshLayout != null) {
+                        swipeRefreshLayout.setRefreshing(false);
+                    }
+                    
+                    if (result.getResultCode() == RESULT_OK) {
+                        // Login was successful, refresh the UI and data
+                        Log.d("MainActivity", "Login successful, refreshing data");
+                        checkCurrentDndStatus(false);
+                        updateUI();
+                        Toast.makeText(MainActivity.this, "Timetable refreshed successfully", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Login was cancelled or failed
+                        Log.d("MainActivity", "Login cancelled or failed");
+                        // Removed "Refresh cancelled" toast message
+                    }
+                }
+            }
+        );
     }
 
     private void initializeViews() {
@@ -400,15 +437,15 @@ public class MainActivity extends AppCompatActivity {
     private void refreshTimetable() {
         Log.d("MainActivity", "Refresh timetable triggered");
         
-        // Stop the refresh animation
+        // Show loading state
         if (swipeRefreshLayout != null) {
-            swipeRefreshLayout.setRefreshing(false);
+            swipeRefreshLayout.setRefreshing(true);
         }
         
-        // Redirecting to login - removed toast
+        // Launch LoginActivity for result instead of finishing this activity
         Intent intent = new Intent(this, LoginActivity.class);
-        startActivity(intent);
-        finish();
+        intent.putExtra("is_refresh", true); // Flag to indicate this is a refresh operation
+        loginActivityLauncher.launch(intent);
     }
 
     private void updateUI() {
@@ -484,9 +521,33 @@ public class MainActivity extends AppCompatActivity {
     private boolean checkExactAlarmPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-            return alarmManager.canScheduleExactAlarms();
+            boolean canSchedule = alarmManager.canScheduleExactAlarms();
+            if (!canSchedule) {
+                showExactAlarmRationale();
+            }
+            return canSchedule;
         }
         return true; // Always available on older versions
+    }
+
+    private void showExactAlarmRationale() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Precise Scheduling Required")
+                .setMessage("This app needs precise alarm scheduling to:\n\n" +
+                           "• Turn DND on/off at exact class times\n" +
+                           "• Ensure reliable silent mode during lectures\n" +
+                           "• Sync with your university timetable\n\n" +
+                           "Without this, DND might activate late or miss your classes.")
+                .setPositiveButton("Grant Permission", (dialog, which) -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                        startActivity(intent);
+                    }
+                })
+                .setNegativeButton("Skip", (dialog, which) -> {
+                    Toast.makeText(this, "Scheduling may be less reliable", Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     private boolean isServiceRunning() {
@@ -599,8 +660,44 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showDndAccessRequired() {
-        Toast.makeText(this, "Grant Do Not Disturb access in settings.", Toast.LENGTH_LONG).show();
-        startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+        // Show beautiful tutorial-style card instead of plain dialog
+        showDndAccessCard();
+    }
+
+    private void showDndAccessCard() {
+        // Inflate the custom DND access card layout
+        View cardView = getLayoutInflater().inflate(R.layout.dnd_access_card, null);
+        
+        // Create a dialog with the custom layout
+        dndAccessDialog = new android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dndAccessDialog.setContentView(cardView);
+        dndAccessDialog.setCancelable(false);
+        
+        // Set up button click listeners
+        TextView btnNotNow = cardView.findViewById(R.id.btn_not_now);
+        TextView btnGrantAccess = cardView.findViewById(R.id.btn_grant_access);
+        
+        btnNotNow.setOnClickListener(v -> {
+            dndAccessDialog.dismiss();
+            dndAccessDialog = null;
+            Toast.makeText(this, "DND scheduling will be disabled", Toast.LENGTH_SHORT).show();
+        });
+        
+        btnGrantAccess.setOnClickListener(v -> {
+            // Show loading state but keep dialog open
+            btnGrantAccess.setText("Redirecting to Settings...");
+            btnGrantAccess.setEnabled(false);
+            btnNotNow.setEnabled(false);
+            
+            // Set flag to indicate we're redirecting to settings
+            isRedirectingToSettings = true;
+            
+            // Start settings activity
+            startActivity(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+        });
+        
+        // Show the dialog
+        dndAccessDialog.show();
     }
 
     private void showNoTimetableData() {
@@ -698,12 +795,33 @@ public class MainActivity extends AppCompatActivity {
         updateHandler.post(updateRunnable);
         checkCurrentDndStatus();
         updateUI(); // Refresh UI state when returning to activity
+        
+        // Clean up dialog state when returning from settings
+        if (isRedirectingToSettings) {
+            isRedirectingToSettings = false;
+            if (dndAccessDialog != null && dndAccessDialog.isShowing()) {
+                dndAccessDialog.dismiss();
+                dndAccessDialog = null;
+            }
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         updateHandler.removeCallbacks(updateRunnable);
+        
+        // Dismiss DND access dialog only if we're redirecting to settings
+        if (isRedirectingToSettings && dndAccessDialog != null && dndAccessDialog.isShowing()) {
+            // Add a small delay to ensure settings screen is actually loading
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (dndAccessDialog != null && dndAccessDialog.isShowing()) {
+                    dndAccessDialog.dismiss();
+                    dndAccessDialog = null;
+                }
+                isRedirectingToSettings = false;
+            }, 1000); // 1 second delay to ensure smooth transition
+        }
     }
 
     // ===================== TUTORIAL SYSTEM =====================

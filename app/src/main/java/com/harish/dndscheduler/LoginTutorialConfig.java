@@ -20,10 +20,10 @@ public class LoginTutorialConfig {
         tutorialManager
             .addStep("welcome", etRegisterNumber,
                 "Welcome to DND Scheduler! 🎉",
-                "Your smart DND schedule manager! This app helps you automatically enable Do Not Disturb during your classes and disable whenever there is no class, so you never miss important calls. Let's get started!")
+                "This app automatically enables Do Not Disturb during your classes and disables it whenever there is no class.\n⚠️ Important: This app doesn't turn on DND during Minor and ACRS classes.\n")
             
             .addStep("credentials", etPassword,
                 "Enter Your SWI Credentials 🔐",
-                "Use your Student Web Interface login details - the same username and password you use to check results and attendance on your college website. This helps us fetch your personalized timetable.");
+                "Use your Student Web Interface login details. This helps us fetch your personalized timetable.");
     }
 }

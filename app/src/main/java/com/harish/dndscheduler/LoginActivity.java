@@ -248,7 +248,7 @@ public class LoginActivity extends AppCompatActivity {
 
         executorService.execute(() -> {
             try {
-                Log.d("LoginFlow", "Step 3: Performing login");
+                // Step 3: Performing login (debug log removed for production)
                 logCookies("Before login POST");
 
                 // Human-like delay before login
@@ -277,7 +277,7 @@ public class LoginActivity extends AppCompatActivity {
                         .build();
 
                 try (Response loginResponse = client.newCall(loginRequest).execute()) {
-                    Log.d("LoginFlow", "Login response: " + loginResponse.code());
+                    // Login response received (debug log removed for production)
 
                     // Handle redirect manually
                     if (loginResponse.code() == 302) {
@@ -293,7 +293,7 @@ public class LoginActivity extends AppCompatActivity {
                         }
                     } else {
                         String responseBody = loginResponse.body() != null ? loginResponse.body().string() : "";
-                        Log.d("LoginFlow", "Login response body length: " + responseBody.length());
+                        // Response body length check (debug log removed for production)
 
                         if (isLoginSuccessful(loginResponse, responseBody)) {
                             fetchTimetableAndProceed();
@@ -428,10 +428,19 @@ public class LoginActivity extends AppCompatActivity {
 
                         mainHandler.post(() -> {
                             showLoading(false);
-                            // Timetable saved - removed toast
-                            Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                            startActivity(intent);
-                            finish();
+                            // Check if this is a refresh operation
+                            boolean isRefresh = getIntent().getBooleanExtra("is_refresh", false);
+                            
+                            if (isRefresh) {
+                                // Return success result to MainActivity
+                                setResult(RESULT_OK);
+                                finish();
+                            } else {
+                                // Normal login flow - navigate to MainActivity
+                                Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                                startActivity(intent);
+                                finish();
+                            }
                         });
                     } else {
                         throw new Exception("Timetable fetch failed: " + response.code());
@@ -511,11 +520,8 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void logCookies(String context) {
-        List<HttpCookie> cookies = cookieManager.getCookieStore().getCookies();
-        Log.d("CookieDebug", context + " - Total cookies: " + cookies.size());
-        for (HttpCookie c : cookies) {
-            Log.d("CookieDebug", context + ": " + c.getName() + "=" + c.getValue());
-        }
+        // Cookie logging removed for production security
+        // Cookies contain sensitive session data
     }
 
     // Enhanced Retry Interceptor
@@ -565,6 +571,21 @@ public class LoginActivity extends AppCompatActivity {
             if (exception != null) throw exception;
             if (response != null) return response;
             throw new IOException("Maximum retries exceeded");
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Check if this is a refresh operation
+        boolean isRefresh = getIntent().getBooleanExtra("is_refresh", false);
+        
+        if (isRefresh) {
+            // Return cancelled result to MainActivity
+            setResult(RESULT_CANCELED);
+            finish();
+        } else {
+            // Normal behavior - close the app
+            super.onBackPressed();
         }
     }
 
